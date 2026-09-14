@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Секреты
+.env
+.env.*
+!.env.example
+*.env
+services/llm-gigachat/.env
+services/app/.env
+
+# Данные
+results.db
+*.sqlite
+*.sqlite3
+
+# Логи
+logs/
+*.log

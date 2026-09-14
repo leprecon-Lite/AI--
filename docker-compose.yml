@@ -1,0 +1,52 @@
+services:
+
+  llm-gigachat:
+    build:
+      context: .
+      dockerfile: services/llm-gigachat/Dockerfile
+    container_name: qai-llm
+    env_file:
+      - .env
+    environment:
+      - LOG_FILE=logs/agent.log
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./services/llm-gigachat/logs:/app/logs
+      - ./services/llm-gigachat/results.db:/app/results.db
+    ports:
+      - "8001:8001"
+    networks:
+      - qai-net
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: services/app/Dockerfile
+    container_name: qai-app
+    environment:
+      - GIGA_SERVICE_URL=http://llm-gigachat:8001
+    ports:
+      - "8888:8000"
+    depends_on:
+      - llm-gigachat
+    networks:
+      - qai-net
+    restart: unless-stopped
+
+  static:
+    image: python:3.11-slim
+    container_name: qai-static
+    working_dir: /www
+    volumes:
+      - ./services/app:/www
+    command: python -m http.server 5500
+    ports:
+      - "5500:5500"
+    networks:
+      - qai-net
+    restart: unless-stopped
+
+networks:
+  qai-net:
+    driver: bridge

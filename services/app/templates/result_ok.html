@@ -1,0 +1,71 @@
+<div class="qai-result">
+
+  <div class="qai-summary qai-status-{{ data.overall_status }}">
+    <div class="qai-summary-color" style="background: {{ data.color }};"></div>
+    <div class="qai-summary-text">
+      <div class="qai-summary-title">{{ data.label }}</div>
+      <div class="qai-summary-meta">
+        Файл: <b>{{ data.filename }}</b> ·
+        Всего партий: <b>{{ data.total_rows }}</b> ·
+        Протокол №{{ data.protocol_id }}
+      </div>
+    </div>
+  </div>
+
+  {% if data.report_text %}
+  <div class="qai-report">
+    <div class="qai-report-title">Заключение</div>
+    <p>{{ data.report_text }}</p>
+  </div>
+  {% endif %}
+
+  <div class="qai-table-wrap">
+    <table class="qai-table">
+      <thead>
+        <tr>
+          <th style="width:60px;">№</th>
+          <th style="width:220px;">Статус</th>
+          <th>Отклонения</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in data.rows %}
+        <tr class="qai-row-{{ row.overall_status }}">
+          <td><b>{{ row.row_index }}</b></td>
+          <td>
+            <span class="qai-dot" style="background: {{ row.color }};"></span>
+            {{ row.label }}
+          </td>
+          <td>
+            {% set problems = row.parameters | selectattr('status', 'in', ['fail', 'warning']) | list %}
+            {% if problems %}
+              {% for p in problems %}
+                <div class="qai-problem qai-problem-{{ p.status }}">
+                  <b>{{ p.parameter }}</b>:
+                  факт <span class="qai-val">{{ p.actual }}</span>
+                  {{ p.unit or '' }},
+                  норма <span class="qai-norm">{{ p.norm }}</span>
+                  <span class="qai-tag">{{ p.status }}</span>
+
+                  {% if p.rule_id and p.status == 'fail' %}
+                    <button type="button"
+                            class="qai-explain-btn"
+                            data-rule-id="{{ p.rule_id }}"
+                            data-actual="{{ p.actual }}"
+                            data-param="{{ p.parameter }}">
+                      Почему это брак?
+                    </button>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            {% else %}
+              <span class="qai-ok-text">Все параметры в норме</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
