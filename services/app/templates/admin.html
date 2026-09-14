@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Админ-панель — AI Quality Agent</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: #f7f4ef;
+      color: #2b2b2b;
+    }
+    header.site-header {
+      background: #f7f4ef;
+      border-bottom: 1px solid #eadfce;
+      padding: 18px 40px;
+      display: flex;
+      align-items: center;
+      gap: 40px;
+    }
+    .logo {
+      font-size: 22px; font-weight: 700; color: #f15a24;
+      letter-spacing: .5px; display: flex; align-items: center; gap: 8px;
+    }
+    .logo::before { content: "●"; color: #f15a24; font-size: 26px; }
+    nav.site-nav { display: flex; gap: 28px; font-size: 14px; color: #3d3d3d; }
+    nav.site-nav a { color: #3d3d3d; text-decoration: none; transition: color .15s; }
+    nav.site-nav a:hover, nav.site-nav a.active { color: #f15a24; }
+
+    .page-title {
+      background: #f7f4ef; padding: 20px 40px 0;
+      display: flex; align-items: baseline; gap: 16px;
+    }
+    .page-title h1 { font-size: 24px; margin: 0; }
+    .page-title .subtitle { color: #8a7a5c; font-size: 14px; }
+
+    .container { max-width: 1200px; margin: 24px auto 60px; padding: 0 40px; }
+
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 16px; margin-bottom: 24px;
+    }
+    .stat-card {
+      background: #fff; border: 1px solid #eadfce;
+      border-radius: 12px; padding: 20px 24px;
+    }
+    .stat-label { font-size: 13px; color: #8a7a5c; text-transform: uppercase; letter-spacing: .04em; }
+    .stat-value { font-size: 32px; font-weight: 700; margin-top: 6px; }
+    .stat-card.good .stat-value    { color: #3fa34d; }
+    .stat-card.warning .stat-value { color: #f1a208; }
+    .stat-card.defect .stat-value  { color: #c0392b; }
+
+    .card {
+      background: #fff; border: 1px solid #eadfce;
+      border-radius: 12px; padding: 24px; margin-bottom: 20px;
+    }
+    .card-title { font-size: 16px; font-weight: 600; margin: 0 0 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      background: #faf7f2; text-align: left; padding: 12px 16px;
+      font-size: 12px; color: #6a6a6a; text-transform: uppercase;
+      letter-spacing: .05em; border-bottom: 1px solid #eadfce;
+    }
+    td { padding: 12px 16px; border-bottom: 1px solid #f1eadc; font-size: 14px; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fdfaf6; }
+
+    .badge {
+      display: inline-block; padding: 3px 10px; border-radius: 10px;
+      font-size: 12px; font-weight: 500;
+    }
+    .badge-good    { background: #e7f5e9; color: #2f7d3c; }
+    .badge-warning { background: #fef8e6; color: #8a6400; }
+    .badge-defect  { background: #fde9e7; color: #8b2c20; }
+
+    .code {
+      font-family: "SF Mono", Consolas, monospace; font-size: 12px;
+      background: #faf7f2; padding: 2px 6px; border-radius: 4px; color: #8a6400;
+    }
+    .empty { text-align: center; padding: 40px; color: #8a7a5c; }
+  </style>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="logo">СОЛЯРИС</div>
+    <nav class="site-nav">
+      <a href="/">Проверка качества</a>
+      <a href="/admin" class="active">Админ-панель</a>
+    </nav>
+  </header>
+
+  <div class="page-title">
+    <h1>Панель администратора</h1>
+    <span class="subtitle">Управление проверками и нормативами</span>
+  </div>
+
+  <div class="container">
+
+    <!-- СТАТИСТИКА -->
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-label">Всего проверок</div><div class="stat-value">{{ stats.total }}</div></div>
+      <div class="stat-card good"><div class="stat-label">🟢 Годно</div><div class="stat-value">{{ stats.good }}</div></div>
+      <div class="stat-card warning"><div class="stat-label">🟡 Внимание</div><div class="stat-value">{{ stats.warning }}</div></div>
+      <div class="stat-card defect"><div class="stat-label">🔴 Брак</div><div class="stat-value">{{ stats.defect }}</div></div>
+    </div>
+
+    {% if stats.top_fails %}
+    <div class="card">
+      <h3 class="card-title">Топ-5 параметров, вызывающих брак</h3>
+      <table>
+        <thead><tr><th>Параметр</th><th>Кол-во браковок</th></tr></thead>
+        <tbody>
+          {% for f in stats.top_fails %}
+          <tr><td>{{ f.parameter }}</td><td><b>{{ f.count }}</b></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    <!-- ИСТОРИЯ -->
+    <div class="card">
+      <h3 class="card-title">История проверок (последние 50)</h3>
+      {% if protocols %}
+      <table>
+        <thead>
+          <tr>
+            <th>№</th><th>Файл</th><th>Дата</th><th>Строк</th>
+            <th>Брак</th><th>Внимание</th><th>Статус</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in protocols %}
+          <tr>
+            <td><b>{{ p.id }}</b></td>
+            <td>{{ p.filename }}</td>
+            <td>{{ (p.uploaded_at or '')[:19].replace('T', ' ') }}</td>
+            <td>{{ p.total_rows }}</td>
+            <td>{{ p.failed_rows }}</td>
+            <td>{{ p.warning_rows }}</td>
+            <td><span class="badge badge-{{ p.overall_status }}">{{ p.overall_status }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty">Проверок пока нет. Загрузите файл на странице проверки.</div>
+      {% endif %}
+    </div>
+
+    <!-- НОРМАТИВЫ -->
+    <div class="card">
+      <h3 class="card-title">Нормативы ГОСТ 32775—2014 ({{ rules|length }} пунктов)</h3>
+      <table>
+        <thead>
+          <tr><th>ID</th><th>Пункт</th><th>Параметр</th><th>Оператор</th><th>Значение</th><th>Ед.</th></tr>
+        </thead>
+        <tbody>
+          {% for r in rules %}
+          <tr>
+            <td><span class="code">{{ r.id }}</span></td>
+            <td>{{ r.clause or '' }}</td>
+            <td>{{ r.parameter or '' }}</td>
+            <td>{{ r.operator or '' }}</td>
+            <td>
+              {% if r.operator == 'от ... до' and r.value is mapping %}
+                {{ r.value.min }}…{{ r.value.max }}
+              {% elif r.value is not none %}
+                {{ r.value }}
+              {% endif %}
+            </td>
+            <td>{{ r.unit or '' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- НАСТРОЙКИ -->
+    <div class="card">
+      <h3 class="card-title">Текущие настройки</h3>
+      <table>
+        <tr><td>Модель GigaChat</td><td><span class="code">{{ config.giga_model }}</span></td></tr>
+        <tr><td>Scope</td><td><span class="code">{{ config.giga_scope }}</span></td></tr>
+        <tr><td>Tolerance (%)</td><td><span class="code">{{ config.warning_tolerance_percent }}</span></td></tr>
+        <tr><td>Уровень логирования</td><td><span class="code">{{ config.log_level }}</span></td></tr>
+        <tr><td>Файл нормативов</td><td><span class="code">{{ config.rules_path }}</span></td></tr>
+        <tr><td>Файл БД</td><td><span class="code">{{ config.db_path }}</span></td></tr>
+      </table>
+    </div>
+
+  </div>
+
+</body>
+</html>

@@ -1,4 +1,5 @@
 import os
+import logging
 import httpx
 from pathlib import Path
 from dotenv import load_dotenv
@@ -9,6 +10,13 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 load_dotenv()
+
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger("agent.gateway")
 
 app = FastAPI(title="AI Quality Agent Gateway")
 
@@ -39,18 +47,56 @@ class ExplainRequest(BaseModel):
     actual: str | float | int
 
 
-# ---------- Служебные эндпоинты ----------
+# ---------- HTML-страницы ----------
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 async def serve_demo():
-    """Отдаёт demo.html как главную страницу."""
+    """Главная страница — demo.html."""
     return FileResponse(Path(__file__).parent / "demo.html")
 
 
 @app.get("/admin", response_class=HTMLResponse)
-async def admin_page():
-    """Отдаёт HTML-страницу админ-панели."""
-    return FileResponse(Path(__file__).parent / "admin.html")
+async def admin_page(request: Request):
+    """
+    Админ-панель. Все данные рендерятся на сервере через Jinja2 —
+    никакого клиентского JS, никаких fetch-запросов.
+    """
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            r1 = await client.get(f"{GIGA_SERVICE_URL}/admin/stats")
+            r2 = await client.get(f"{GIGA_SERVICE_URL}/admin/protocols", params={"limit": 50})
+            r3 = await client.get(f"{GIGA_SERVICE_URL}/admin/rules")
+            r4 = await client.get(f"{GIGA_SERVICE_URL}/admin/config")
+
+            stats = r1.json() if r1.status_code == 200 else {"total": 0, "good": 0, "warning": 0, "defect": 0, "top_fails": []}
+            protocols = r2.json().get("items", []) if r2.status_code == 200 else []
+            rules = r3.json().get("items", []) if r3.status_code == 200 else []
+            config = r4.json() if r4.status_code == 200 else {
+                "giga_model": "—", "giga_scope": "—",
+                "warning_tolerance_percent": 0,
+                "log_level": "—", "rules_path": "—", "db_path": "—",
+            }
+        except Exception as e:
+            logger.exception("Ошибка загрузки данных админки: %s", e)
+            stats = {"total": 0, "good": 0, "warning": 0, "defect": 0, "top_fails": []}
+            protocols = []
+            rules = []
+            config = {
+                "giga_model": "—", "giga_scope": "—",
+                "warning_tolerance_percent": 0,
+                "log_level": "—", "rules_path": "—", "db_path": "—",
+            }
+
+    return templates.TemplateResponse(
+        request=request,
+        name="admin.html",
+        context={
+            "stats": stats,
+            "protocols": protocols,
+            "rules": rules,
+            "config": config,
+        },
+    )
 
 
 # ---------- JSON API ----------
@@ -144,7 +190,7 @@ async def ui_check(request: Request, file: UploadFile = File(...)):
     )
 
 
-# ---------- Админ-API (прокси) ----------
+# ---------- Админ-API (прокси, оставлены для совместимости) ----------
 
 @app.get("/admin/api/stats")
 async def proxy_admin_stats():
@@ -160,13 +206,6 @@ async def proxy_admin_protocols(status: str = "", limit: int = 50):
             f"{GIGA_SERVICE_URL}/admin/protocols",
             params={"status": status, "limit": limit},
         )
-        return r.json()
-
-
-@app.get("/admin/api/protocols/{pid}")
-async def proxy_admin_protocol_detail(pid: int):
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        r = await client.get(f"{GIGA_SERVICE_URL}/history/{pid}")
         return r.json()
 
 
