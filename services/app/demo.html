@@ -339,7 +339,7 @@
 
   <div class="qai-wrap">
     <form class="qai-form"
-          hx-post="http://127.0.0.1:8888/ui/check/"
+          hx-post="/ui/check/"
           hx-target="#result"
           hx-swap="innerHTML"
           hx-encoding="multipart/form-data"
@@ -471,7 +471,7 @@
       explainModal.classList.add('active');
 
       try {
-        const r = await fetch('http://127.0.0.1:8888/explain/', {
+        const r = await fetch('/explain/', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ rule_id: ruleId, actual: actual }),
