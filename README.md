@@ -7,6 +7,16 @@
 
 ---
 
+## 🌐 Live-демо
+
+**Публичный URL:** https://ai-96gb.onrender.com
+
+> ⚠️ **Первый запрос может занять 30–60 секунд** — бесплатный тариф Render
+> «усыпляет» контейнер при простое и «будит» при первом обращении.
+> Дальше всё работает быстро.
+
+---
+
 ## Что делает агент
 
 Принимает на вход структурированный протокол испытаний (.csv или .xlsx),
@@ -26,7 +36,7 @@
 
 ## Требования
 
-- **Docker Desktop** (Windows/macOS) или **docker + docker compose** (Linux) — для запуска через Docker.
+- **Docker Desktop** (Windows/macOS) или **docker + docker compose** (Linux).
 - **Python 3.10+** — если запускаете без Docker.
 - Доступ в интернет (для обращения к GigaChat API).
 - Файл корневого сертификата Минцифры `russian_trusted_root_ca_pem.crt`
@@ -39,8 +49,8 @@
 ### 1. Клонируйте репозиторий
 
 ```bash
-git clone https://github.com/<ваш_логин>/<ваш_репозиторий>.git
-cd <ваш_репозиторий>
+git clone https://github.com/leprecon-Lite/AI--.git
+cd AI--
 ```
 
 ### 2. Подготовьте `.env`
@@ -55,7 +65,7 @@ cp .env.example .env
 ### 3. Запустите
 
 ```bash
-docker compose up --build
+docker compose up -d
 ```
 
 Первый запуск займёт 3–5 минут (скачает образы и установит зависимости).
@@ -66,8 +76,10 @@ docker compose up --build
 | Сервис | URL |
 |--------|-----|
 | **Веб-интерфейс** | http://127.0.0.1:5500/demo.html |
-| API шлюза (Swagger) | http://127.0.0.1:8000/docs |
+| API шлюза (Swagger) | http://127.0.0.1:8888/docs |
 | API AI-сервиса (Swagger) | http://127.0.0.1:8001/docs |
+
+> ℹ️ Порт шлюза — **8888** (порт 8000 занят другим проектом).
 
 ### 5. Остановите
 
@@ -139,10 +151,11 @@ Serving HTTP on 0.0.0.0 port 5500
 ## Использование
 
 1. Откройте в браузере: **http://127.0.0.1:5500/demo.html**
+   (или публичный URL: https://ai-96gb.onrender.com)
 2. Перетащите файл `batch_30.csv` (лежит в `services/llm-gigachat/`)
    в зону загрузки или нажмите, чтобы выбрать.
 3. Нажмите **«Проверить»**.
-4. Через 3–5 секунд появится:
+4. Через 3–5 секунд (на бесплатном Render — 30–60 сек) появится:
    - Цветная плашка со статусом.
    - Текстовый отчёт от GigaChat.
    - Таблица со всеми партиями и перечнем отклонений.
@@ -159,7 +172,7 @@ Serving HTTP on 0.0.0.0 port 5500
 | Параметр | Значение |
 |----------|----------|
 | Метод | `POST` |
-| URL | `http://127.0.0.1:8000/upload_file/` |
+| URL | `http://127.0.0.1:8888/upload_file/` |
 | Body | `form-data` |
 | Поле | `file` (тип **File**) = `batch_30.csv` |
 
@@ -167,10 +180,39 @@ Serving HTTP on 0.0.0.0 port 5500
 
 **Другие эндпоинты:**
 
-- `GET http://127.0.0.1:8000/history/` — история проверок.
-- `GET http://127.0.0.1:8000/history/{id}` — детали протокола.
-- `POST http://127.0.0.1:8000/explain/` с телом
+- `GET http://127.0.0.1:8888/history/` — история проверок.
+- `GET http://127.0.0.1:8888/history/{id}` — детали протокола.
+- `POST http://127.0.0.1:8888/explain/` с телом
   `{"rule_id": "gost32775-t2-001", "actual": 6.2}` — RAG-объяснение.
+
+---
+
+## Деплой на Render
+
+Проект развёрнут на Render.com (бесплатный тариф, Docker runtime).
+
+**Особенности деплоя:**
+
+- Используется **один контейнер** (`Dockerfile.all`) — внутри через `supervisord`
+  запускаются AI-сервис и шлюз. Статику `demo.html` отдаёт сам шлюз.
+- Все URL в `demo.html` **относительные** — работают и локально, и на проде.
+- **Persistent disk отсутствует** — `results.db` сбрасывается при каждом деплое.
+  Это осознанное решение для хакатона.
+
+**Настройки Render:**
+
+| Поле | Значение |
+|------|----------|
+| Runtime | Docker |
+| Dockerfile Path | `./Dockerfile.all` |
+| Start Command | (из Dockerfile) |
+| Instance Type | Free |
+| Region | Oregon / Frankfurt |
+
+**Переменные окружения** (Settings → Environment) — те же, что в `.env`.
+
+**Чтобы сервис не «засыпал»:**
+- Настроить cron на https://cron-job.org → пинг `https://ai-96gb.onrender.com/` каждые 10 минут.
 
 ---
 
@@ -181,17 +223,19 @@ Serving HTTP on 0.0.0.0 port 5500
 ├── README.md
 ├── requirements.txt
 ├── docker-compose.yml
+├── Dockerfile.all                  # Single-container для Render
+├── supervisord.conf                # Менеджер процессов для Dockerfile.all
 ├── .env.example
 ├── .gitignore
 └── services/
-    ├── app/                                # Шлюз (порт 8000)
+    ├── app/                                # Шлюз
     │   ├── Dockerfile
     │   ├── main.py
     │   ├── demo.html                       # Веб-интерфейс (htmx)
     │   └── templates/
     │       ├── result_ok.html
     │       └── result_error.html
-    └── llm-gigachat/                       # AI-сервис (порт 8001)
+    └── llm-gigachat/                       # AI-сервис
         ├── Dockerfile
         ├── main.py
         ├── GigaChatService.py
@@ -205,6 +249,7 @@ Serving HTTP on 0.0.0.0 port 5500
         │   ├── __init__.py
         │   └── test_classifier.py
         ├── gost_32775_2014_rules.xlsx      # База знаний
+        ├── gost_32775_2014_chunks_verified.json  # Бэкап JSON
         ├── batch_30.csv
         ├── batch_30.xlsx
         └── russian_trusted_root_ca_pem.crt
@@ -223,7 +268,7 @@ Serving HTTP on 0.0.0.0 port 5500
 ```
 Пользователь → demo.html (htmx)
     ↓ POST /ui/check/
-Шлюз (порт 8000) → AI-сервис (порт 8001)
+Шлюз (порт 8888) → AI-сервис (порт 8001)
     ↓ POST /check/
 AI-сервис:
     1. pandas читает CSV/XLSX
@@ -357,8 +402,9 @@ python -m pytest tests/ -v
 | `Address already in use` | `taskkill /F /IM python.exe` (Windows) |
 | `TemplateNotFound` | Проверьте, что папка `templates/` лежит рядом с `main.py` |
 | `htmx:invalidPath` | Проверьте meta-тег `htmx-config` в `demo.html` |
-| `port is already allocated` (Docker) | Остановите локальные сервисы перед `docker compose up` |
+| `port is already allocated` (Docker) | Смените порт в `docker-compose.yml` |
 | `Cannot connect to Docker daemon` | Запустите Docker Desktop |
+| Render «спит» 30–60 сек | Настройте cron-job.org для пинга |
 
 ---
 
@@ -374,6 +420,7 @@ python -m pytest tests/ -v
 - **htmx** — интерактивный фронтенд без JS-фреймворков
 - **Pydantic Settings** — конфигурация
 - **Docker + docker-compose** — контейнеризация
+- **supervisord** — менеджер процессов (для Render)
 - **pytest** — юнит-тесты
 
 ---
