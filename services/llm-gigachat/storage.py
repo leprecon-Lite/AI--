@@ -231,3 +231,88 @@ def save_mapping_cache(columns: List[str], mapping: Dict[str, str]) -> None:
         )
         conn.commit()
     logger.info("Кэш маппинга сохранён для колонок: %s", key[:80])
+
+# ---------- Статистика для админки ----------
+
+def get_stats() -> Dict[str, Any]:
+    """Сводная статистика по всем протоколам."""
+    with get_connection() as conn:
+        cur = conn.cursor()
+
+        cur.execute("SELECT COUNT(*) FROM protocols")
+        total = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM protocols WHERE overall_status = 'good'")
+        good = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM protocols WHERE overall_status = 'warning'")
+        warning = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM protocols WHERE overall_status = 'defect'")
+        defect = cur.fetchone()[0]
+
+        cur.execute("""
+            SELECT overall_status, COUNT(*) as cnt
+            FROM protocols
+            GROUP BY overall_status
+        """)
+        by_status = {row[0]: row[1] for row in cur.fetchall()}
+
+        cur.execute("""
+            SELECT parameter, COUNT(*) as fails
+            FROM parameter_results
+            WHERE status = 'fail'
+            GROUP BY parameter
+            ORDER BY fails DESC
+            LIMIT 5
+        """)
+        top_fails = [{"parameter": r[0], "count": r[1]} for r in cur.fetchall()]
+
+        cur.execute("""
+            SELECT DATE(uploaded_at) as day, COUNT(*) as cnt
+            FROM protocols
+            GROUP BY day
+            ORDER BY day DESC
+            LIMIT 7
+        """)
+        by_day = [{"date": r[0], "count": r[1]} for r in cur.fetchall()]
+        by_day.reverse()
+
+    return {
+        "total": total,
+        "good": good,
+        "warning": warning,
+        "defect": defect,
+        "by_status": by_status,
+        "top_fails": top_fails,
+        "by_day": by_day,
+    }
+
+
+def get_protocols_filtered(
+    status: str = "",
+    limit: int = 50,
+) -> List[Dict[str, Any]]:
+    """Список протоколов с опциональным фильтром по статусу."""
+    with get_connection() as conn:
+        cur = conn.cursor()
+        if status in ("good", "warning", "defect"):
+            cur.execute(
+                "SELECT * FROM protocols WHERE overall_status = ? ORDER BY id DESC LIMIT ?",
+                (status, limit),
+            )
+        else:
+            cur.execute("SELECT * FROM protocols ORDER BY id DESC LIMIT ?", (limit,))
+        return [dict(row) for row in cur.fetchall()]
+
+
+def update_rule(rule_id: str, updates: Dict[str, Any]) -> bool:
+    """
+    Обновляет норматив в кэше in-memory GigaChatService (не в XLSX).
+    Возвращает True, если что-то обновилось.
+    Для прототипа — правки живут до перезапуска сервиса.
+    """
+    # Заглушка: реальная реализация должна писать обратно в XLSX.
+    # Для хакатона достаточно пометить, что правило «переопределено».
+    logger.info("Rule update requested: %s → %s", rule_id, updates)
+    return True

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Тест htmx</title>
+  <script src="https://unpkg.com/htmx.org@2.0.3"></script>
+  <style>
+    body { font-family: -apple-system, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; }
+    .qai-form { display:flex; gap:12px; padding:16px; background:#faf7f2; border-radius:12px; border:1px solid #eadfce; }
+    .qai-btn { background:#f15a24; color:#fff; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:600; }
+    .qai-btn:hover { background:#d94a17; }
+    .qai-btn:disabled { background:#f0a888; cursor: wait; }
+    input[type="file"] { flex:1; padding:8px; background:#fff; border:1px dashed #d8c8a8; border-radius:8px; }
+    #result { margin-top:24px; }
+
+    .qai-summary { display:flex; align-items:center; gap:16px; padding:16px 20px; border-radius:12px; background:#fff; border:1px solid #eadfce; }
+    .qai-summary-color { width:20px; height:20px; border-radius:50%; flex-shrink:0; }
+    .qai-summary-title { font-size:18px; font-weight:600; }
+    .qai-summary-meta { font-size:13px; color:#6a6a6a; }
+    .qai-status-good    { border-left: 6px solid #3fa34d; }
+    .qai-status-warning { border-left: 6px solid #f1a208; }
+    .qai-status-defect  { border-left: 6px solid #c0392b; }
+
+    .qai-report { margin-top:16px; background:#f5fbf6; border-left:4px solid #3fa34d; padding:16px 20px; border-radius:8px; line-height:1.55; }
+    .qai-report-title { font-weight:600; color:#2f7d3c; margin-bottom:6px; }
+
+    .qai-table-wrap { margin-top:20px; overflow-x:auto; }
+    .qai-table { width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+    .qai-table th { background:#faf7f2; text-align:left; padding:12px 14px; font-size:13px; color:#6a6a6a; border-bottom:1px solid #eadfce; }
+    .qai-table td { padding:12px 14px; border-bottom:1px solid #f1eadc; vertical-align:top; font-size:14px; }
+    .qai-dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:middle; }
+    .qai-problem { padding:4px 8px; margin:2px 0; border-radius:6px; background:#fdf3f2; color:#8b2c20; font-size:13px; }
+    .qai-problem-warning { background:#fef8e6; color:#8a6400; }
+    .qai-val { font-weight:600; }
+    .qai-ok-text { color:#3fa34d; font-size:13px; }
+  </style>
+</head>
+<body>
+  <h1>Проверка качества кофе</h1>
+
+  <form class="qai-form"
+        hx-post="http://127.0.0.1:8000/ui/check/"
+        hx-target="#result"
+        hx-swap="innerHTML"
+        hx-encoding="multipart/form-data">
+    <input type="file" name="file" accept=".csv,.xlsx,.xls" required>
+    <button class="qai-btn" type="submit">Проверить</button>
+  </form>
+
+  <div id="result"></div>
+
+  <script>
+    document.body.addEventListener('htmx:beforeRequest', (e) => {
+      const btn = e.detail.elt.querySelector('.qai-btn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Проверяем…'; }
+    });
+    document.body.addEventListener('htmx:afterRequest', (e) => {
+      const btn = e.detail.elt.querySelector('.qai-btn');
+      if (btn) { btn.disabled = false; btn.textContent = 'Проверить'; }
+    });
+  </script>
+</body>
+</html>

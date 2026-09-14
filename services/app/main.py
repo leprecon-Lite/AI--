@@ -1,12 +1,12 @@
 import os
 import httpx
+from pathlib import Path
 from dotenv import load_dotenv
-from fastapi import FastAPI, UploadFile, File, Request
+from fastapi import FastAPI, UploadFile, File, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
-from pathlib import Path
 
 load_dotenv()
 
@@ -25,7 +25,7 @@ app.add_middleware(
         "http://localhost",
     ],
     allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "OPTIONS", "PUT"],
     allow_headers=["*"],
 )
 
@@ -42,8 +42,15 @@ class ExplainRequest(BaseModel):
 # ---------- Служебные эндпоинты ----------
 
 @app.get("/")
-def hello_message():
-    return {"message": "Hello World"}
+async def serve_demo():
+    """Отдаёт demo.html как главную страницу."""
+    return FileResponse(Path(__file__).parent / "demo.html")
+
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_page():
+    """Отдаёт HTML-страницу админ-панели."""
+    return FileResponse(Path(__file__).parent / "admin.html")
 
 
 # ---------- JSON API ----------
@@ -137,8 +144,57 @@ async def ui_check(request: Request, file: UploadFile = File(...)):
     )
 
 
+# ---------- Админ-API (прокси) ----------
+
+@app.get("/admin/api/stats")
+async def proxy_admin_stats():
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.get(f"{GIGA_SERVICE_URL}/admin/stats")
+        return r.json()
+
+
+@app.get("/admin/api/protocols")
+async def proxy_admin_protocols(status: str = "", limit: int = 50):
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.get(
+            f"{GIGA_SERVICE_URL}/admin/protocols",
+            params={"status": status, "limit": limit},
+        )
+        return r.json()
+
+
+@app.get("/admin/api/protocols/{pid}")
+async def proxy_admin_protocol_detail(pid: int):
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.get(f"{GIGA_SERVICE_URL}/history/{pid}")
+        return r.json()
+
+
+@app.get("/admin/api/rules")
+async def proxy_admin_rules():
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.get(f"{GIGA_SERVICE_URL}/admin/rules")
+        return r.json()
+
+
+@app.get("/admin/api/config")
+async def proxy_admin_config():
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.get(f"{GIGA_SERVICE_URL}/admin/config")
+        return r.json()
+
+
+@app.put("/admin/api/rules/{rule_id}")
+async def proxy_admin_update_rule(rule_id: str, payload: dict = Body(...)):
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.put(
+            f"{GIGA_SERVICE_URL}/admin/rules/{rule_id}",
+            json=payload,
+        )
+        return r.json()
+
+
 if __name__ == "__main__":
-    import os
     import uvicorn
     host = os.getenv("HOST", "127.0.0.1")
     reload_flag = os.getenv("RELOAD", "false").lower() == "true"
