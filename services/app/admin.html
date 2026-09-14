@@ -33,10 +33,7 @@
     }
     .logo::before { content: "●"; color: #f15a24; font-size: 26px; }
     nav.site-nav { display: flex; gap: 28px; font-size: 14px; color: #3d3d3d; }
-    nav.site-nav a {
-      color: #3d3d3d; text-decoration: none;
-      transition: color .15s;
-    }
+    nav.site-nav a { color: #3d3d3d; text-decoration: none; transition: color .15s; }
     nav.site-nav a:hover, nav.site-nav a.active { color: #f15a24; }
 
     .page-title {
@@ -69,10 +66,7 @@
       transition: all .15s;
     }
     .tab:hover { color: #f15a24; }
-    .tab.active {
-      color: #f15a24;
-      border-bottom-color: #f15a24;
-    }
+    .tab.active { color: #f15a24; border-bottom-color: #f15a24; }
 
     .container {
       max-width: 1200px;
@@ -99,7 +93,7 @@
     .stat-card.warning .stat-value { color: #f1a208; }
     .stat-card.defect .stat-value  { color: #c0392b; }
 
-    /* ---------- Таблицы ---------- */
+    /* ---------- Карточки ---------- */
     .card {
       background: #fff;
       border: 1px solid #eadfce;
@@ -107,15 +101,8 @@
       padding: 24px;
       margin-bottom: 20px;
     }
-    .card-title {
-      font-size: 16px;
-      font-weight: 600;
-      margin: 0 0 16px;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
+    .card-title { font-size: 16px; font-weight: 600; margin: 0 0 16px; }
+    table { width: 100%; border-collapse: collapse; }
     th {
       background: #faf7f2;
       text-align: left;
@@ -126,11 +113,7 @@
       letter-spacing: .05em;
       border-bottom: 1px solid #eadfce;
     }
-    td {
-      padding: 12px 16px;
-      border-bottom: 1px solid #f1eadc;
-      font-size: 14px;
-    }
+    td { padding: 12px 16px; border-bottom: 1px solid #f1eadc; font-size: 14px; }
     tr:last-child td { border-bottom: none; }
     tr:hover td { background: #fdfaf6; }
 
@@ -145,11 +128,7 @@
     .badge-warning { background: #fef8e6; color: #8a6400; }
     .badge-defect  { background: #fde9e7; color: #8b2c20; }
 
-    .filter-bar {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 16px;
-    }
+    .filter-bar { display: flex; gap: 8px; margin-bottom: 16px; }
     .filter-btn {
       padding: 6px 14px;
       background: #fff;
@@ -172,16 +151,16 @@
       color: #8a6400;
     }
 
-    .loading {
-      text-align: center;
-      padding: 40px;
-      color: #8a7a5c;
-    }
+    .loading { text-align: center; padding: 40px; color: #8a7a5c; }
+    .empty   { text-align: center; padding: 40px; color: #8a7a5c; }
 
-    .empty {
-      text-align: center;
-      padding: 40px;
-      color: #8a7a5c;
+    .error-box {
+      background: #fde9e7;
+      border-left: 4px solid #c0392b;
+      padding: 14px 18px;
+      border-radius: 8px;
+      color: #8b2c20;
+      font-size: 14px;
     }
   </style>
 </head>
@@ -215,6 +194,15 @@
   </div>
 
   <script>
+    // ===========================================================
+    // Базовый URL для API.
+    // Если страница открыта через шлюз (8888 / Render) — относительный.
+    // Если через статику (5500) — абсолютный на 8888.
+    // ===========================================================
+    const API_BASE = (window.location.port === '5500')
+      ? 'http://127.0.0.1:8888'
+      : '';
+
     const loaded = { stats: false, protocols: false, rules: false, config: false };
 
     function showTab(name, btn) {
@@ -236,20 +224,36 @@
       panel.innerHTML = '<div class="loading">⏳ Загрузка…</div>';
 
       if (name === 'stats') {
-        fetch('/admin/api/stats').then(r => r.json()).then(renderStats);
+        fetch(API_BASE + '/admin/api/stats')
+          .then(r => r.json())
+          .then(renderStats)
+          .catch(err => renderError(panel, err));
       } else if (name === 'protocols') {
         loadProtocols('');
       } else if (name === 'rules') {
-        fetch('/admin/api/rules').then(r => r.json()).then(renderRules);
+        fetch(API_BASE + '/admin/api/rules')
+          .then(r => r.json())
+          .then(renderRules)
+          .catch(err => renderError(panel, err));
       } else if (name === 'config') {
-        fetch('/admin/api/config').then(r => r.json()).then(renderConfig);
+        fetch(API_BASE + '/admin/api/config')
+          .then(r => r.json())
+          .then(renderConfig)
+          .catch(err => renderError(panel, err));
       }
+    }
+
+    function renderError(panel, err) {
+      panel.innerHTML = '<div class="error-box">Ошибка загрузки: ' + err.message +
+        '<br><br>Проверьте, что бэкенд запущен и доступен по адресу <b>' +
+        (API_BASE || window.location.origin) + '</b></div>';
     }
 
     // ============== СТАТИСТИКА ==============
     function renderStats(data) {
+      const panel = document.getElementById('panel-stats');
       if (data.error) {
-        document.getElementById('panel-stats').innerHTML = '<div class="card"><p style="color:#c0392b">' + data.error + '</p></div>';
+        panel.innerHTML = '<div class="card"><p style="color:#c0392b">' + data.error + '</p></div>';
         return;
       }
 
@@ -260,7 +264,6 @@
       html += '<div class="stat-card defect"><div class="stat-label">🔴 Брак</div><div class="stat-value">' + data.defect + '</div></div>';
       html += '</div>';
 
-      // Топ проблемных параметров
       if (data.top_fails && data.top_fails.length > 0) {
         html += '<div class="card"><h3 class="card-title">Топ-5 параметров, чаще всего вызывающих брак</h3>';
         html += '<table><thead><tr><th>Параметр</th><th>Кол-во браковок</th></tr></thead><tbody>';
@@ -270,7 +273,6 @@
         html += '</tbody></table></div>';
       }
 
-      // Динамика по дням
       if (data.by_day && data.by_day.length > 0) {
         html += '<div class="card"><h3 class="card-title">Активность за последние дни</h3>';
         html += '<table><thead><tr><th>Дата</th><th>Проверок</th></tr></thead><tbody>';
@@ -280,7 +282,7 @@
         html += '</tbody></table></div>';
       }
 
-      document.getElementById('panel-stats').innerHTML = html;
+      panel.innerHTML = html;
     }
 
     // ============== ИСТОРИЯ ==============
@@ -301,9 +303,10 @@
         document.getElementById('protocols-list').innerHTML = '<div class="loading">⏳ Загрузка…</div>';
       }
 
-      fetch('/admin/api/protocols?status=' + status + '&limit=50')
+      fetch(API_BASE + '/admin/api/protocols?status=' + status + '&limit=50')
         .then(r => r.json())
-        .then(renderProtocols);
+        .then(renderProtocols)
+        .catch(err => renderError(document.getElementById('protocols-list'), err));
     }
 
     function renderProtocols(data) {

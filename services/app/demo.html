@@ -34,8 +34,8 @@
     }
     .logo::before { content: "●"; color: #f15a24; font-size: 26px; }
     nav.site-nav { display: flex; gap: 28px; font-size: 14px; color: #3d3d3d; }
-    nav.site-nav span { cursor: pointer; transition: color .15s; }
-    nav.site-nav span:hover { color: #f15a24; }
+    nav.site-nav a { color: #3d3d3d; text-decoration: none; transition: color .15s; }
+    nav.site-nav a:hover, nav.site-nav a.active { color: #f15a24; }
     .phone {
       margin-left: auto;
       background: #f15a24;
@@ -323,10 +323,8 @@
   <header class="site-header">
     <div class="logo">СОЛЯРИС</div>
     <nav class="site-nav">
-      <span>В ЦЕНТРЕ ВНИМАНИЯ</span>
-      <span>КАТАЛОГ</span>
-      <span>О НАС</span>
-      <span>КОНТАКТЫ</span>
+      <a href="/" class="active">Проверка качества</a>
+      <a href="/admin">Админ-панель</a>
     </nav>
     <div class="phone">+7 (903) 858 78 72</div>
   </header>
