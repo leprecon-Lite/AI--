@@ -1,5 +1,5 @@
 """
-SQLite-хранилище: протоколы, параметры, отчёты, кэш маппинга.
+SQLite-хранилище: протоколы, параметры, отчёты, кэш маппинга, версии нормативов.
 Поддерживает многорядные протоколы (несколько партий в одном файле).
 """
 import json
@@ -55,6 +55,15 @@ SCHEMA = """
         created_at TEXT NOT NULL,
         hits INTEGER DEFAULT 0
     );
+
+    CREATE TABLE IF NOT EXISTS rules_versions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        version_label TEXT NOT NULL,
+        rules_path TEXT NOT NULL,
+        rules_count INTEGER NOT NULL,
+        loaded_at TEXT NOT NULL,
+        is_active INTEGER DEFAULT 0
+    );
 """
 
 
@@ -70,7 +79,7 @@ def _migrate_if_needed(conn: sqlite3.Connection) -> None:
         "SELECT name FROM sqlite_master WHERE type='table' AND name='protocols'"
     )
     if not cur.fetchone():
-        return  # таблиц нет, создадутся ниже
+        return
 
     cur = conn.execute("PRAGMA table_info(protocols)")
     cols = {row[1] for row in cur.fetchall()}
@@ -99,9 +108,6 @@ def save_protocol(
     rows_results: List[Dict[str, Any]],
     report_text: Optional[str] = None,
 ) -> int:
-    """
-    rows_results: [{"row_index": 1, "overall_status": "defect", "parameters": [...]}, ...]
-    """
     total_rows = len(rows_results)
     failed_rows = sum(1 for r in rows_results if r["overall_status"] == "defect")
     warning_rows = sum(1 for r in rows_results if r["overall_status"] == "warning")
@@ -144,6 +150,7 @@ def save_protocol(
             )
 
         conn.commit()
+
     logger.info(
         "Сохранён протокол id=%d, строк=%d, defect=%d, warning=%d",
         protocol_id, total_rows, failed_rows, warning_rows,
@@ -172,7 +179,6 @@ def get_protocol_details(protocol_id: int) -> Dict[str, Any]:
         )
         all_params = [dict(row) for row in cur.fetchall()]
 
-        # Группируем параметры по строкам
         rows_map: Dict[int, List[Dict[str, Any]]] = {}
         for p in all_params:
             ri = p.get("row_index") or 0
@@ -231,6 +237,7 @@ def save_mapping_cache(columns: List[str], mapping: Dict[str, str]) -> None:
         )
         conn.commit()
     logger.info("Кэш маппинга сохранён для колонок: %s", key[:80])
+
 
 # ---------- Статистика для админки ----------
 
@@ -307,12 +314,53 @@ def get_protocols_filtered(
 
 
 def update_rule(rule_id: str, updates: Dict[str, Any]) -> bool:
-    """
-    Обновляет норматив в кэше in-memory GigaChatService (не в XLSX).
-    Возвращает True, если что-то обновилось.
-    Для прототипа — правки живут до перезапуска сервиса.
-    """
-    # Заглушка: реальная реализация должна писать обратно в XLSX.
-    # Для хакатона достаточно пометить, что правило «переопределено».
+    """Заглушка: обновление правила в памяти сервиса."""
     logger.info("Rule update requested: %s → %s", rule_id, updates)
     return True
+
+
+# ---------- Версионирование нормативов ----------
+
+def register_rules_version(rules_path: str, rules_count: int, version_label: str = "") -> int:
+    """
+    Регистрирует версию нормативов и делает её активной.
+    Деактивирует все предыдущие версии.
+    """
+    if not version_label:
+        version_label = f"v{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
+
+    with get_connection() as conn:
+        # Деактивируем все предыдущие версии
+        conn.execute("UPDATE rules_versions SET is_active = 0")
+
+        cur = conn.cursor()
+        cur.execute(
+            """INSERT INTO rules_versions (version_label, rules_path, rules_count, loaded_at, is_active)
+               VALUES (?, ?, ?, ?, 1)""",
+            (version_label, rules_path, rules_count, datetime.utcnow().isoformat()),
+        )
+        version_id = cur.lastrowid
+        conn.commit()
+
+    logger.info(
+        "Зарегистрирована версия нормативов: %s (id=%d, %d правил)",
+        version_label, version_id, rules_count,
+    )
+    return version_id
+
+
+def get_active_rules_version() -> Optional[Dict[str, Any]]:
+    """Возвращает текущую активную версию нормативов."""
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM rules_versions WHERE is_active = 1 ORDER BY id DESC LIMIT 1")
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
+def get_all_rules_versions() -> List[Dict[str, Any]]:
+    """Возвращает все версии нормативов (новые сверху)."""
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM rules_versions ORDER BY id DESC")
+        return [dict(row) for row in cur.fetchall()]

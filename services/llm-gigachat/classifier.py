@@ -24,7 +24,6 @@ NON_CHECKABLE_IDS = {
 }
 
 
-# Человекочитаемые ярлыки статусов — для UI
 STATUS_LABELS_RU = {
     "ok": "Соответствует",
     "warning": "Требует внимания",
@@ -36,6 +35,19 @@ OVERALL_LABELS_RU = {
     "good": "Продукция годна",
     "warning": "Требует внимания оператора",
     "defect": "Продукция бракуется",
+}
+
+# Соответствия единиц измерения
+UNIT_ALIASES = {
+    "%": {"%", "процент", "проц", "percent", "pct"},
+    "г": {"г", "g", "грамм", "gr"},
+    "кг": {"кг", "kg", "килограмм"},
+    "мг": {"мг", "mg", "миллиграмм"},
+    "мм": {"мм", "mm", "миллиметр"},
+    "см": {"см", "cm", "сантиметр"},
+    "м": {"м", "m", "метр"},
+    "мпа": {"мпа", "mpa"},
+    "°c": {"°c", "c", "цельсий", "celsius"},
 }
 
 
@@ -152,6 +164,69 @@ def format_norm(rule: Dict[str, Any]) -> str:
     return f"{value}"
 
 
+def extract_unit_from_column(column_name: str) -> Optional[str]:
+    """
+    Пытается извлечь единицу измерения из названия колонки.
+
+    Примеры:
+    - "Влага, %"      → "%"
+    - "Влага (%)"     → "%"
+    - "Влага %"       → "%"
+    - "Масса, г"      → "г"
+    - "Moisture, %"   → "%"
+    - "Влага"         → None
+    """
+    if not column_name:
+        return None
+    name = str(column_name).lower()
+
+    # Кандидаты: ищем в скобках и после запятой/точки с запятой
+    candidates = re.findall(r"[\(,;]\s*([а-яa-z%°]+)\s*[\)]?", name)
+
+    # Единица в конце строки после пробела: "Влага %"
+    tail_match = re.search(r"\s+([а-яa-z%°]+)\s*$", name)
+    if tail_match:
+        candidates.append(tail_match.group(1))
+
+    # Если кандидатов нет — берём последнее слово
+    if not candidates:
+        tail = re.split(r"[\(,;]", name)[-1].strip(" )")
+        candidates.append(tail)
+
+    for c in candidates:
+        c_clean = c.strip().lower()
+        for canonical, aliases in UNIT_ALIASES.items():
+            if c_clean in aliases:
+                return canonical
+
+    return None
+
+
+def check_unit_match(column_name: str, rule: Dict[str, Any]) -> str:
+    """
+    Возвращает:
+    - "match"    — единицы совпадают
+    - "mismatch" — не совпадают
+    - "unknown"  — единицу колонки определить не удалось
+    """
+    rule_unit = (rule.get("unit") or "").strip().lower()
+    if not rule_unit:
+        return "unknown"
+
+    col_unit = extract_unit_from_column(column_name)
+    if not col_unit:
+        return "unknown"
+
+    if col_unit == rule_unit:
+        return "match"
+
+    for canonical, aliases in UNIT_ALIASES.items():
+        if col_unit in aliases and rule_unit in aliases:
+            return "match"
+
+    return "mismatch"
+
+
 def analyze_row(
     row: Dict[str, Any],
     mapping: Dict[str, str],
@@ -188,6 +263,7 @@ def analyze_row(
                 "status_ru": STATUS_LABELS_RU["unknown"],
                 "rule_id": None,
                 "clause": None,
+                "unit_status": "unknown",
                 "reason": "Норматив для параметра не найден",
             })
             continue
@@ -203,6 +279,8 @@ def analyze_row(
             status = classify_text(raw_value, rule)
             actual_display = str(raw_value)
 
+        unit_status = check_unit_match(param_name, rule)
+
         results.append({
             "row_index": row_index,
             "parameter": rule.get("parameter"),
@@ -214,6 +292,7 @@ def analyze_row(
             "status_ru": STATUS_LABELS_RU.get(status, status),
             "rule_id": rule.get("id"),
             "clause": rule.get("clause"),
+            "unit_status": unit_status,
         })
 
     return results
@@ -223,10 +302,7 @@ def find_unchecked_params(
     checked_rule_ids: set,
     rules: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    """
-    Возвращает список нормативов, которые НЕ проверялись
-    (их колонок нет в протоколе).
-    """
+    """Возвращает список нормативов, которые НЕ проверялись."""
     unchecked = []
     for r in rules:
         rid = r.get("id")

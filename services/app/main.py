@@ -47,26 +47,20 @@ class ExplainRequest(BaseModel):
     actual: str | float | int
 
 
-# ---------- HTML-страницы ----------
-
 @app.get("/", response_class=HTMLResponse)
 async def serve_demo():
-    """Главная страница — demo.html."""
     return FileResponse(Path(__file__).parent / "demo.html")
 
 
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_page(request: Request):
-    """
-    Админ-панель. Все данные рендерятся на сервере через Jinja2 —
-    никакого клиентского JS, никаких fetch-запросов.
-    """
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             r1 = await client.get(f"{GIGA_SERVICE_URL}/admin/stats")
             r2 = await client.get(f"{GIGA_SERVICE_URL}/admin/protocols", params={"limit": 50})
             r3 = await client.get(f"{GIGA_SERVICE_URL}/admin/rules")
             r4 = await client.get(f"{GIGA_SERVICE_URL}/admin/config")
+            r5 = await client.get(f"{GIGA_SERVICE_URL}/admin/rules/version")
 
             stats = r1.json() if r1.status_code == 200 else {"total": 0, "good": 0, "warning": 0, "defect": 0, "top_fails": []}
             protocols = r2.json().get("items", []) if r2.status_code == 200 else []
@@ -76,16 +70,15 @@ async def admin_page(request: Request):
                 "warning_tolerance_percent": 0,
                 "log_level": "—", "rules_path": "—", "db_path": "—",
             }
+            rules_version = r5.json() if r5.status_code == 200 else {"active": None, "all": []}
         except Exception as e:
             logger.exception("Ошибка загрузки данных админки: %s", e)
             stats = {"total": 0, "good": 0, "warning": 0, "defect": 0, "top_fails": []}
             protocols = []
             rules = []
-            config = {
-                "giga_model": "—", "giga_scope": "—",
-                "warning_tolerance_percent": 0,
-                "log_level": "—", "rules_path": "—", "db_path": "—",
-            }
+            config = {"giga_model": "—", "giga_scope": "—", "warning_tolerance_percent": 0,
+                      "log_level": "—", "rules_path": "—", "db_path": "—"}
+            rules_version = {"active": None, "all": []}
 
     return templates.TemplateResponse(
         request=request,
@@ -95,11 +88,10 @@ async def admin_page(request: Request):
             "protocols": protocols,
             "rules": rules,
             "config": config,
+            "rules_version": rules_version,
         },
     )
 
-
-# ---------- JSON API ----------
 
 @app.post("/upload_file/")
 async def upload_file(file: UploadFile = File(...)):
@@ -107,14 +99,9 @@ async def upload_file(file: UploadFile = File(...)):
         try:
             file_content = await file.read()
             files = {"file": (file.filename, file_content, file.content_type)}
-
-            response = await client.post(
-                f"{GIGA_SERVICE_URL}/check/",
-                files=files,
-            )
+            response = await client.post(f"{GIGA_SERVICE_URL}/check/", files=files)
             response.raise_for_status()
             return response.json()
-
         except httpx.RequestError as e:
             return {"error": f"Ошибка соединения: {str(e)}"}
         except httpx.HTTPStatusError as e:
@@ -137,7 +124,6 @@ async def proxy_history_item(protocol_id: int):
 
 @app.post("/explain/")
 async def proxy_explain(req: ExplainRequest):
-    """Проксирует запрос RAG-объяснения на AI-сервис."""
     async with httpx.AsyncClient(timeout=60.0) as client:
         try:
             r = await client.post(
@@ -151,8 +137,6 @@ async def proxy_explain(req: ExplainRequest):
         except httpx.HTTPStatusError as e:
             return {"error": f"Ошибка {e.response.status_code}: {e.response.text}"}
 
-
-# ---------- HTML API для htmx ----------
 
 @app.post("/ui/check/", response_class=HTMLResponse)
 async def ui_check(request: Request, file: UploadFile = File(...)):
@@ -190,7 +174,7 @@ async def ui_check(request: Request, file: UploadFile = File(...)):
     )
 
 
-# ---------- Админ-API (прокси, оставлены для совместимости) ----------
+# ---------- Админ-API (прокси) ----------
 
 @app.get("/admin/api/stats")
 async def proxy_admin_stats():
@@ -213,6 +197,13 @@ async def proxy_admin_protocols(status: str = "", limit: int = 50):
 async def proxy_admin_rules():
     async with httpx.AsyncClient(timeout=30.0) as client:
         r = await client.get(f"{GIGA_SERVICE_URL}/admin/rules")
+        return r.json()
+
+
+@app.get("/admin/api/rules/version")
+async def proxy_admin_rules_version():
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.get(f"{GIGA_SERVICE_URL}/admin/rules/version")
         return r.json()
 
 

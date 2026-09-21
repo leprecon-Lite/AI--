@@ -84,4 +84,23 @@
   </div>
   {% endif %}
 
+  {% if data.unit_warnings %}
+  <div class="qai-unit-warning">
+    <div class="qai-unit-warning-title">
+      ⚠️ Возможное несовпадение единиц измерения: {{ data.unit_warnings|length }}
+    </div>
+    <ul class="qai-unit-warning-list">
+      {% for u in data.unit_warnings[:5] %}
+        <li>
+          Колонка <b>{{ u.source_column }}</b> (строка {{ u.row_index }}) —
+          ожидается единица <b>{{ u.expected_unit }}</b>
+        </li>
+      {% endfor %}
+    </ul>
+    <div class="qai-unit-warning-hint">
+      Проверьте, что в протоколе указаны те же единицы измерения, что и в нормативе.
+    </div>
+  </div>
+  {% endif %}
+
 </div>

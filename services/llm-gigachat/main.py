@@ -7,6 +7,8 @@ from storage import (
     get_protocol_details,
     get_stats,
     get_protocols_filtered,
+    get_active_rules_version,
+    get_all_rules_versions,
 )
 from logger import logger
 
@@ -31,7 +33,6 @@ def say_hello():
 
 @app.post("/check/")
 async def check_file(file: UploadFile = File(...)):
-    """Основной эндпоинт: маппинг + проверка + отчёт GigaChat + сохранение."""
     try:
         return await gigachat.upload_document(file)
     except Exception as e:
@@ -41,7 +42,6 @@ async def check_file(file: UploadFile = File(...)):
 
 @app.post("/explain/")
 def explain(req: ExplainRequest):
-    """RAG-объяснение причин отклонения для оператора."""
     try:
         return gigachat.explain_deviation(req.rule_id, req.actual)
     except Exception as e:
@@ -82,7 +82,6 @@ def admin_protocols(status: str = "", limit: int = 50):
 
 @app.get("/admin/rules")
 def admin_rules():
-    """Список нормативов (без тяжёлого поля text)."""
     result = []
     for r in gigachat.rules:
         result.append({
@@ -96,6 +95,13 @@ def admin_rules():
             "unit": r.get("unit"),
         })
     return {"items": result, "total": len(result)}
+
+
+@app.get("/admin/rules/version")
+def admin_rules_version():
+    active = get_active_rules_version()
+    all_versions = get_all_rules_versions()
+    return {"active": active, "all": all_versions}
 
 
 @app.get("/admin/config")

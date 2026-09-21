@@ -19,7 +19,7 @@ from classifier import (
     STATUS_COLORS,
     STATUS_LABELS,
 )
-from storage import init_db, save_protocol
+from storage import init_db, save_protocol, register_rules_version
 from mapper import SemanticMapper
 
 
@@ -29,14 +29,14 @@ REPORT_PROMPT = """
 Твоя задача — ОПИСАТЬ ФАКТЫ для оператора. Ты НЕ даёшь рекомендаций.
 
 КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО использовать слова и фразы:
-- "изолировать", "изоляция", "изолировать партию"
+- "изолировать", "изоляция"
 - "утилизировать", "утилизация"
 - "переработать", "переработка"
 - "списать", "списание"
 - "отправить на", "направить на"
 - "рекомендуется", "рекомендуем", "рекомендация"
 - "необходимо", "следует", "нужно" + любое действие
-- "забраковать партию" (можно: "выявлены критические отклонения")
+- "забраковать партию"
 
 Ты МОЖЕШЬ:
 - Называть параметры, вышедшие за пределы нормы.
@@ -45,7 +45,7 @@ REPORT_PROMPT = """
 - Описывать распределение партий по статусам.
 - Сообщать, каких параметров нет в протоколе (неполнота проверки).
 
-ФОРМАТ: 4–8 предложений, деловой текст, без markdown, без списков, без нумерации.
+ФОРМАТ: 4–8 предложений, деловой текст, без markdown, без списков.
 
 Решение о дальнейших действиях принимает комиссия — это НЕ твоя зона ответственности.
 """
@@ -66,7 +66,6 @@ EXPLAIN_PROMPT = """
 """
 
 
-# Фразы, которые GigaChat не должен использовать (проверяем после генерации)
 FORBIDDEN_PHRASES = [
     "изолировать", "изоляци",
     "утилизировать", "утилизаци",
@@ -96,9 +95,17 @@ class GigaChatService:
         self.mapper = SemanticMapper(self.client, self.rules)
 
         init_db()
+
+        # Регистрация версии нормативов
+        self.rules_version_id = register_rules_version(
+            rules_path=str(rules_path.name),
+            rules_count=len(self.rules),
+            version_label=f"{rules_path.stem} ({len(self.rules)} правил)",
+        )
+
         logger.info(
-            "GigaChatService инициализирован: правил=%d, алиасов=%d",
-            len(self.rules), len(self.alias_index),
+            "GigaChatService инициализирован: правил=%d, алиасов=%d, версия=%d",
+            len(self.rules), len(self.alias_index), self.rules_version_id,
         )
 
     @staticmethod
@@ -180,23 +187,15 @@ class GigaChatService:
         logger.info("Загружено нормативов (XLSX): %d", len(rules))
         return rules
 
-    # ---------- Пост-фильтр ----------
-
     @staticmethod
     def _sanitize_report(text: str) -> str | None:
-        """
-        Убирает из отчёта запрещённые фразы (рекомендации вне ТЗ).
-        Возвращает None, если найдена хотя бы одна запрещённая фраза —
-        тогда вызывающий код использует fallback.
-        """
+        """Убирает запрещённые фразы. Возвращает None, если найдена хотя бы одна."""
         text_lower = text.lower()
         for phrase in FORBIDDEN_PHRASES:
             if phrase in text_lower:
-                logger.warning("Отчёт содержит запрещённую фразу: '%s'. Заменяем на fallback.", phrase)
+                logger.warning("Отчёт содержит запрещённую фразу: '%s'.", phrase)
                 return None
         return text
-
-    # ---------- LLM: сводный отчёт ----------
 
     def _build_summary(
         self,
@@ -238,7 +237,7 @@ class GigaChatService:
             "warning_count": len(warning_rows),
             "good_count": len(good_rows),
             "sample_problem_rows": sample,
-            "unchecked_params": unchecked[:10],  # первые 10 непроверенных
+            "unchecked_params": unchecked[:10],
             "unchecked_count": len(unchecked),
             "truncated": len(problem_rows) > 10,
         }
@@ -260,7 +259,6 @@ class GigaChatService:
             ]))
             raw_text = response.choices[0].message.content.strip()
 
-            # Пост-фильтр: убираем рекомендации
             sanitized = self._sanitize_report(raw_text)
             if sanitized is None:
                 return self._fallback_report(filename, file_overall, rows_results, unchecked)
@@ -306,8 +304,6 @@ class GigaChatService:
             lines.append(f"Не проверено (нет в протоколе): {names}{more}.")
 
         return " ".join(lines)
-
-    # ---------- RAG: объяснение причин брака ----------
 
     def explain_deviation(self, rule_id: str, actual: Any) -> Dict[str, Any]:
         rule = self.rules_by_id.get(rule_id)
@@ -356,8 +352,6 @@ class GigaChatService:
             "actual_value": actual,
             "explanation": explanation,
         }
-
-    # ---------- Пайплайн ----------
 
     def _read_dataframe(self, filename: str, content: bytes) -> pd.DataFrame:
         fname = (filename or "").lower()
@@ -419,10 +413,7 @@ class GigaChatService:
         columns = df.columns.tolist()
         logger.info("Файл %s: строк=%d, колонок=%d", filename, len(df), len(columns))
 
-        # GigaChat #1: семантический маппинг колонок (кэшируется)
         mapping = self.mapper.map_columns(columns)
-
-        # Python: детерминированная проверка
         rows_results = self._analyze_dataframe(df, mapping)
 
         if not rows_results:
@@ -432,20 +423,33 @@ class GigaChatService:
                 "mapping": mapping,
             }
 
-        # Какие rule_id были проверены
         checked_ids = set()
         for r in rows_results:
             for p in r["parameters"]:
                 if p.get("rule_id"):
                     checked_ids.add(p["rule_id"])
 
-        # Непроверенные нормативы (их нет в протоколе)
         unchecked = find_unchecked_params(checked_ids, self.rules)
+
+        # Собираем параметры с несовпадением единиц
+        unit_warnings = []
+        seen = set()
+        for r in rows_results:
+            for p in r["parameters"]:
+                if p.get("unit_status") == "mismatch":
+                    key = (p.get("parameter"), p.get("unit"))
+                    if key not in seen:
+                        seen.add(key)
+                        unit_warnings.append({
+                            "parameter": p.get("parameter"),
+                            "source_column": p.get("source_column"),
+                            "expected_unit": p.get("unit"),
+                            "row_index": p.get("row_index"),
+                        })
 
         all_params = [p for r in rows_results for p in r["parameters"]]
         file_overall = overall_status(all_params)
 
-        # GigaChat #2: сводный отчёт
         report_text = self._generate_report_text(filename, file_overall, rows_results, unchecked)
 
         protocol_id = save_protocol(filename, file_overall, rows_results, report_text)
@@ -460,6 +464,11 @@ class GigaChatService:
             "rows": rows_results,
             "mapping": mapping,
             "unchecked": unchecked,
+            "unit_warnings": unit_warnings,
+            "rules_version": {
+                "id": self.rules_version_id,
+                "label": f"{len(self.rules)} правил",
+            },
             "report_text": report_text,
         }
 

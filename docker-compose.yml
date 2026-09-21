@@ -34,19 +34,6 @@ services:
       - qai-net
     restart: unless-stopped
 
-  static:
-    image: python:3.11-slim
-    container_name: qai-static
-    working_dir: /www
-    volumes:
-      - ./services/app:/www
-    command: python -m http.server 5500
-    ports:
-      - "5500:5500"
-    networks:
-      - qai-net
-    restart: unless-stopped
-
 networks:
   qai-net:
     driver: bridge
