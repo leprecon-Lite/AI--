@@ -13,6 +13,7 @@ from logger import logger
 from classifier import (
     build_alias_index,
     analyze_row,
+    find_unchecked_params,
     overall_status,
     format_norm,
     STATUS_COLORS,
@@ -24,18 +25,29 @@ from mapper import SemanticMapper
 
 REPORT_PROMPT = """
 Ты — эксперт по контролю качества кофейного сырья.
-Тебе дают СВОДКУ результатов автоматической проверки партии протоколов (не все данные, а агрегат).
+Тебе дают результаты уже проведённой автоматической проверки (числа и статусы).
+Твоя задача — ОПИСАТЬ ФАКТЫ для оператора. Ты НЕ даёшь рекомендаций.
 
-Твоя задача — написать краткий, деловой текстовый отчёт для оператора на русском языке.
+КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО использовать слова и фразы:
+- "изолировать", "изоляция", "изолировать партию"
+- "утилизировать", "утилизация"
+- "переработать", "переработка"
+- "списать", "списание"
+- "отправить на", "направить на"
+- "рекомендуется", "рекомендуем", "рекомендация"
+- "необходимо", "следует", "нужно" + любое действие
+- "забраковать партию" (можно: "выявлены критические отклонения")
 
-Правила:
-- Не выдумывай параметры и номера строк, которых нет в данных.
-- Не меняй статусы (ok/warning/fail) — они уже определены.
-- Если есть забракованные партии (defect) — упомяни, сколько их и какие основные причины (по параметрам).
-- Если есть warning — упомяни как «требует внимания».
-- Опирайся на конкретные номера строк (row_index) из sample_problem_rows.
-- Пиши 4–8 предложений. Без markdown. Без списков. Сплошной текст.
-- Не принимай решений о переработке/списании — это за комиссией.
+Ты МОЖЕШЬ:
+- Называть параметры, вышедшие за пределы нормы.
+- Указывать фактические и нормативные значения.
+- Ссылаться на пункт ГОСТа.
+- Описывать распределение партий по статусам.
+- Сообщать, каких параметров нет в протоколе (неполнота проверки).
+
+ФОРМАТ: 4–8 предложений, деловой текст, без markdown, без списков, без нумерации.
+
+Решение о дальнейших действиях принимает комиссия — это НЕ твоя зона ответственности.
 """
 
 
@@ -49,9 +61,21 @@ EXPLAIN_PROMPT = """
 - Объясняй простым языком, без излишней академичности.
 - Опирайся ТОЛЬКО на предоставленный текст пункта ГОСТа и фактическое значение.
 - Не выдумывай номера пунктов и цифры.
-- Не предлагай решений о переработке/списании — это за комиссией.
+- НЕ ДАВАЙ РЕКОМЕНДАЦИЙ ("нужно", "следует", "рекомендуется", "изолировать", "утилизировать").
 - Без markdown, без списков. Сплошной текст.
 """
+
+
+# Фразы, которые GigaChat не должен использовать (проверяем после генерации)
+FORBIDDEN_PHRASES = [
+    "изолировать", "изоляци",
+    "утилизировать", "утилизаци",
+    "переработать", "переработк",
+    "списать", "списани",
+    "рекомендуется", "рекомендуем", "рекомендаци",
+    "направить на", "отправить на",
+    "забраковать партию",
+]
 
 
 class GigaChatService:
@@ -78,14 +102,7 @@ class GigaChatService:
         )
 
     @staticmethod
-    @staticmethod
     def _load_rules(path: Path) -> List[Dict[str, Any]]:
-        """
-        Загружает нормативы из XLSX или JSON — по расширению файла.
-        На выходе всегда единый список dict с полями:
-        id, standard, clause, category, parameter, aliases,
-        value, operator, unit, method_ref, text.
-        """
         if not path.exists():
             logger.error("Файл нормативов не найден: %s", path)
             return []
@@ -108,13 +125,6 @@ class GigaChatService:
 
     @staticmethod
     def _load_rules_from_excel(path: Path) -> List[Dict[str, Any]]:
-        """
-        Читает XLSX с колонками:
-        id, standard, clause, category, parameter, aliases, operator,
-        value_min, value_max, value_text, unit, method_ref, text
-
-        Восстанавливает исходную структуру value в зависимости от operator.
-        """
         try:
             df = pd.read_excel(path, engine="openpyxl")
         except Exception as e:
@@ -136,7 +146,6 @@ class GigaChatService:
         for _, row in df.iterrows():
             operator = str(row.get("operator", "")).strip()
 
-            # Восстанавливаем value в зависимости от оператора
             if operator == "не более":
                 value = _to_float(row.get("value_max"))
             elif operator == "не менее":
@@ -154,7 +163,7 @@ class GigaChatService:
             else:
                 aliases = [a.strip() for a in str(aliases_raw).split(";") if a.strip()]
 
-            rule = {
+            rules.append({
                 "id": row.get("id"),
                 "standard": row.get("standard"),
                 "clause": row.get("clause"),
@@ -166,11 +175,26 @@ class GigaChatService:
                 "unit": None if _is_empty(row.get("unit")) else row.get("unit"),
                 "method_ref": None if _is_empty(row.get("method_ref")) else row.get("method_ref"),
                 "text": row.get("text"),
-            }
-            rules.append(rule)
+            })
 
         logger.info("Загружено нормативов (XLSX): %d", len(rules))
         return rules
+
+    # ---------- Пост-фильтр ----------
+
+    @staticmethod
+    def _sanitize_report(text: str) -> str | None:
+        """
+        Убирает из отчёта запрещённые фразы (рекомендации вне ТЗ).
+        Возвращает None, если найдена хотя бы одна запрещённая фраза —
+        тогда вызывающий код использует fallback.
+        """
+        text_lower = text.lower()
+        for phrase in FORBIDDEN_PHRASES:
+            if phrase in text_lower:
+                logger.warning("Отчёт содержит запрещённую фразу: '%s'. Заменяем на fallback.", phrase)
+                return None
+        return text
 
     # ---------- LLM: сводный отчёт ----------
 
@@ -179,6 +203,7 @@ class GigaChatService:
         filename: str,
         file_overall: str,
         rows_results: List[Dict[str, Any]],
+        unchecked: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
         total = len(rows_results)
         defect_rows = [r for r in rows_results if r["overall_status"] == "defect"]
@@ -213,6 +238,8 @@ class GigaChatService:
             "warning_count": len(warning_rows),
             "good_count": len(good_rows),
             "sample_problem_rows": sample,
+            "unchecked_params": unchecked[:10],  # первые 10 непроверенных
+            "unchecked_count": len(unchecked),
             "truncated": len(problem_rows) > 10,
         }
 
@@ -221,8 +248,9 @@ class GigaChatService:
         filename: str,
         file_overall: str,
         rows_results: List[Dict[str, Any]],
+        unchecked: List[Dict[str, Any]],
     ) -> str:
-        summary = self._build_summary(filename, file_overall, rows_results)
+        summary = self._build_summary(filename, file_overall, rows_results, unchecked)
         user_content = json.dumps(summary, ensure_ascii=False, indent=2)
 
         try:
@@ -230,16 +258,24 @@ class GigaChatService:
                 Messages(role=MessagesRole.SYSTEM, content=REPORT_PROMPT.strip()),
                 Messages(role=MessagesRole.USER, content=user_content),
             ]))
-            return response.choices[0].message.content.strip()
+            raw_text = response.choices[0].message.content.strip()
+
+            # Пост-фильтр: убираем рекомендации
+            sanitized = self._sanitize_report(raw_text)
+            if sanitized is None:
+                return self._fallback_report(filename, file_overall, rows_results, unchecked)
+            return sanitized
+
         except Exception as e:
             logger.exception("GigaChat недоступен для отчёта: %s", e)
-            return self._fallback_report(filename, file_overall, rows_results)
+            return self._fallback_report(filename, file_overall, rows_results, unchecked)
 
     @staticmethod
     def _fallback_report(
         filename: str,
         file_overall: str,
         rows_results: List[Dict[str, Any]],
+        unchecked: List[Dict[str, Any]],
     ) -> str:
         total = len(rows_results)
         defect = sum(1 for r in rows_results if r["overall_status"] == "defect")
@@ -248,7 +284,7 @@ class GigaChatService:
 
         lines = [
             f"Протокол: {filename}.",
-            f"Всего партий: {total}. Годных: {good}. Требуют внимания: {warning}. Забраковано: {defect}.",
+            f"Всего партий: {total}. Годных: {good}. Требуют внимания: {warning}. С критическими отклонениями: {defect}.",
         ]
 
         for r in rows_results:
@@ -259,20 +295,21 @@ class GigaChatService:
                 continue
             parts = ", ".join(
                 f"{p['parameter']} — факт {p['actual']} {p.get('unit') or ''}, "
-                f"норма {p['norm']} ({p['status']})"
+                f"норма {p['norm']} ({p['status_ru']})"
                 for p in bad
             )
             lines.append(f"Партия №{r['row_index']}: {parts}.")
+
+        if unchecked:
+            names = ", ".join(u["parameter"] for u in unchecked[:5])
+            more = f" и ещё {len(unchecked) - 5}" if len(unchecked) > 5 else ""
+            lines.append(f"Не проверено (нет в протоколе): {names}{more}.")
 
         return " ".join(lines)
 
     # ---------- RAG: объяснение причин брака ----------
 
     def explain_deviation(self, rule_id: str, actual: Any) -> Dict[str, Any]:
-        """
-        RAG-объяснение: почему отклонение этого параметра критично.
-        Возвращает текст объяснения + ссылку на пункт ГОСТа.
-        """
         rule = self.rules_by_id.get(rule_id)
         if not rule:
             return {"error": f"Норматив {rule_id} не найден"}
@@ -297,6 +334,12 @@ class GigaChatService:
                 Messages(role=MessagesRole.USER, content=user_content),
             ]))
             explanation = response.choices[0].message.content.strip()
+            sanitized = self._sanitize_report(explanation)
+            if sanitized is None:
+                explanation = (
+                    f"Параметр «{rule.get('parameter')}» вышел за пределы нормы. "
+                    f"Согласно {rule.get('standard')} ({rule.get('clause')}): {rule.get('text')}"
+                )
         except Exception as e:
             logger.exception("GigaChat недоступен для объяснения: %s", e)
             explanation = (
@@ -332,7 +375,6 @@ class GigaChatService:
         else:
             raise ValueError("Поддерживаются только .csv и .xlsx")
 
-        # Убираем BOM и пробелы из имён колонок
         df.columns = [str(c).replace("\ufeff", "").strip() for c in df.columns]
         return df
 
@@ -390,11 +432,21 @@ class GigaChatService:
                 "mapping": mapping,
             }
 
+        # Какие rule_id были проверены
+        checked_ids = set()
+        for r in rows_results:
+            for p in r["parameters"]:
+                if p.get("rule_id"):
+                    checked_ids.add(p["rule_id"])
+
+        # Непроверенные нормативы (их нет в протоколе)
+        unchecked = find_unchecked_params(checked_ids, self.rules)
+
         all_params = [p for r in rows_results for p in r["parameters"]]
         file_overall = overall_status(all_params)
 
         # GigaChat #2: сводный отчёт
-        report_text = self._generate_report_text(filename, file_overall, rows_results)
+        report_text = self._generate_report_text(filename, file_overall, rows_results, unchecked)
 
         protocol_id = save_protocol(filename, file_overall, rows_results, report_text)
 
@@ -407,6 +459,7 @@ class GigaChatService:
             "total_rows": len(rows_results),
             "rows": rows_results,
             "mapping": mapping,
+            "unchecked": unchecked,
             "report_text": report_text,
         }
 

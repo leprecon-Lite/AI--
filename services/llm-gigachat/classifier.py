@@ -11,9 +11,6 @@ from logger import logger
 
 WARNING_TOLERANCE_PERCENT = settings.warning_tolerance_percent
 
-# Эпсилон для компенсации ошибок округления floating point.
-# Без него 5.775 при норме 5.5 даёт 5.000000000000001% вместо ровно 5.0%
-# и граничное значение уходит в fail вместо warning.
 FLOAT_EPSILON = 1e-9
 
 NON_CHECKABLE_IDS = {
@@ -24,6 +21,21 @@ NON_CHECKABLE_IDS = {
     "gost32775-ctrl-002",
     "gost32775-ctrl-003",
     "gost32775-ctrl-004",
+}
+
+
+# Человекочитаемые ярлыки статусов — для UI
+STATUS_LABELS_RU = {
+    "ok": "Соответствует",
+    "warning": "Требует внимания",
+    "fail": "Не соответствует",
+    "unknown": "Нет норматива",
+}
+
+OVERALL_LABELS_RU = {
+    "good": "Продукция годна",
+    "warning": "Требует внимания оператора",
+    "defect": "Продукция бракуется",
 }
 
 
@@ -67,7 +79,7 @@ def parse_number(raw: Any) -> Optional[float]:
     if isinstance(raw, (int, float)):
         try:
             f = float(raw)
-            return None if f != f else f  # NaN
+            return None if f != f else f
         except (ValueError, TypeError):
             return None
     s = str(raw).strip().replace(",", ".")
@@ -147,27 +159,20 @@ def analyze_row(
     alias_index: Dict[str, Dict[str, Any]],
     row_index: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
-    """
-    Анализирует одну строку.
-    mapping: {колонка CSV: rule_id} — результат семантического маппинга.
-    Если для колонки маппинга нет — fallback на fuzzy-поиск по alias_index.
-    """
     results: List[Dict[str, Any]] = []
 
     for param_name, raw_value in row.items():
         if raw_value is None:
             continue
-        if isinstance(raw_value, float) and raw_value != raw_value:  # NaN
+        if isinstance(raw_value, float) and raw_value != raw_value:
             continue
 
         rule: Optional[Dict[str, Any]] = None
 
-        # 1) Основной путь: маппинг от GigaChat
         rule_id = mapping.get(param_name)
         if rule_id and rule_id in rules_by_id:
             rule = rules_by_id[rule_id]
 
-        # 2) Fallback: fuzzy-поиск по алиасам
         if rule is None:
             rule = find_rule_fuzzy(param_name, alias_index)
 
@@ -180,13 +185,13 @@ def analyze_row(
                 "norm": None,
                 "unit": None,
                 "status": "unknown",
+                "status_ru": STATUS_LABELS_RU["unknown"],
                 "rule_id": None,
                 "clause": None,
                 "reason": "Норматив для параметра не найден",
             })
             continue
 
-        # Пропускаем непроверяемые пункты (транспортирование, погрешности методов)
         if rule.get("id") in NON_CHECKABLE_IDS:
             continue
 
@@ -206,11 +211,35 @@ def analyze_row(
             "norm": format_norm(rule),
             "unit": rule.get("unit"),
             "status": status,
+            "status_ru": STATUS_LABELS_RU.get(status, status),
             "rule_id": rule.get("id"),
             "clause": rule.get("clause"),
         })
 
     return results
+
+
+def find_unchecked_params(
+    checked_rule_ids: set,
+    rules: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    Возвращает список нормативов, которые НЕ проверялись
+    (их колонок нет в протоколе).
+    """
+    unchecked = []
+    for r in rules:
+        rid = r.get("id")
+        if not rid or rid in NON_CHECKABLE_IDS:
+            continue
+        if rid not in checked_rule_ids:
+            unchecked.append({
+                "rule_id": rid,
+                "parameter": r.get("parameter"),
+                "clause": r.get("clause"),
+                "norm": format_norm(r),
+            })
+    return unchecked
 
 
 def overall_status(param_results: List[Dict[str, Any]]) -> str:

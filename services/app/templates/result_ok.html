@@ -45,7 +45,7 @@
                   факт <span class="qai-val">{{ p.actual }}</span>
                   {{ p.unit or '' }},
                   норма <span class="qai-norm">{{ p.norm }}</span>
-                  <span class="qai-tag">{{ p.status }}</span>
+                  <span class="qai-tag">{{ p.status_ru }}</span>
 
                   {% if p.rule_id and p.status == 'fail' %}
                     <button type="button"
@@ -53,13 +53,13 @@
                             data-rule-id="{{ p.rule_id }}"
                             data-actual="{{ p.actual }}"
                             data-param="{{ p.parameter }}">
-                      Почему это брак?
+                      Что означает параметр?
                     </button>
                   {% endif %}
                 </div>
               {% endfor %}
             {% else %}
-              <span class="qai-ok-text">Все параметры в норме</span>
+              <span class="qai-ok-text">Все проверенные параметры в норме</span>
             {% endif %}
           </td>
         </tr>
@@ -67,5 +67,21 @@
       </tbody>
     </table>
   </div>
+
+  {% if data.unchecked %}
+  <div class="qai-unchecked">
+    <div class="qai-unchecked-title">
+      ⚠️ Не проверено (нет в протоколе): {{ data.unchecked|length }} параметр(ов)
+    </div>
+    <ul class="qai-unchecked-list">
+      {% for u in data.unchecked[:10] %}
+        <li><b>{{ u.parameter }}</b> — норма {{ u.norm }} (п. {{ u.clause }})</li>
+      {% endfor %}
+      {% if data.unchecked|length > 10 %}
+        <li>… и ещё {{ data.unchecked|length - 10 }}</li>
+      {% endif %}
+    </ul>
+  </div>
+  {% endif %}
 
 </div>
