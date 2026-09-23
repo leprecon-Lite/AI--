@@ -1,14 +1,12 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Body
+from fastapi.responses import Response
 from pydantic import BaseModel
-from typing import Optional, Any
+from typing import Optional, Any, List
 from GigaChatService import GigaChatService
 from storage import (
-    get_recent_protocols,
-    get_protocol_details,
-    get_stats,
-    get_protocols_filtered,
-    get_active_rules_version,
-    get_all_rules_versions,
+    get_recent_protocols, get_protocol_details, get_stats, get_protocols_filtered,
+    get_active_rules_version, get_all_rules_versions,
+    get_audit_log, log_action, export_history_rows, get_users,
 )
 from logger import logger
 
@@ -24,6 +22,20 @@ class ExplainRequest(BaseModel):
 class RuleUpdate(BaseModel):
     value: Optional[Any] = None
     aliases: Optional[list] = None
+    operator: Optional[str] = None
+    value_min: Optional[float] = None
+    value_max: Optional[float] = None
+    value_text: Optional[str] = None
+    unit: Optional[str] = None
+
+
+class AssistantRequest(BaseModel):
+    question: str
+
+
+class GenerateAliasesRequest(BaseModel):
+    parameter: str
+    unit: str = ""
 
 
 @app.get("/")
@@ -59,80 +71,127 @@ def history_item(protocol_id: int):
     return get_protocol_details(protocol_id)
 
 
-# ---------- Админ-API ----------
+@app.get("/export/pdf/{protocol_id}")
+def export_pdf(protocol_id: int):
+    pdf_bytes = gigachat.export_protocol_pdf(protocol_id)
+    if pdf_bytes is None:
+        raise HTTPException(404, "Протокол не найден")
+
+    log_action("export_pdf", "protocol", str(protocol_id))
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="protocol_{protocol_id}.pdf"'},
+    )
+
+
+# ---------- Админ ----------
 
 @app.get("/admin/stats")
 def admin_stats():
-    try:
-        return get_stats()
-    except Exception as e:
-        logger.exception("Ошибка статистики")
-        return {"error": str(e)}
+    return get_stats()
 
 
 @app.get("/admin/protocols")
 def admin_protocols(status: str = "", limit: int = 50):
-    try:
-        items = get_protocols_filtered(status=status, limit=limit)
-        return {"items": items, "total": len(items)}
-    except Exception as e:
-        logger.exception("Ошибка списка протоколов")
-        return {"error": str(e)}
+    return {"items": get_protocols_filtered(status=status, limit=limit)}
 
 
 @app.get("/admin/rules")
 def admin_rules():
-    result = []
-    for r in gigachat.rules:
-        result.append({
-            "id": r.get("id"),
-            "standard": r.get("standard"),
-            "clause": r.get("clause"),
-            "category": r.get("category"),
-            "parameter": r.get("parameter"),
-            "operator": r.get("operator"),
-            "value": r.get("value"),
-            "unit": r.get("unit"),
-        })
-    return {"items": result, "total": len(result)}
+    return {"items": [{
+        "id": r.get("id"), "standard": r.get("standard"), "clause": r.get("clause"),
+        "category": r.get("category"), "parameter": r.get("parameter"),
+        "aliases": r.get("aliases", []), "operator": r.get("operator"),
+        "value": r.get("value"), "unit": r.get("unit"), "text": r.get("text"),
+    } for r in gigachat.rules], "total": len(gigachat.rules)}
+
+
+@app.get("/admin/rules/{rule_id}")
+def admin_rule_detail(rule_id: str):
+    rule = gigachat.rules_by_id.get(rule_id)
+    if not rule:
+        raise HTTPException(404, f"Норматив {rule_id} не найден")
+    return rule
+
+
+@app.put("/admin/rules/{rule_id}")
+def admin_update_rule(rule_id: str, payload: RuleUpdate):
+    updates = {k: v for k, v in payload.dict().items() if v is not None}
+    if not updates:
+        raise HTTPException(400, "Нечего обновлять")
+    ok = gigachat.update_rule_in_file(rule_id, updates)
+    if not ok:
+        raise HTTPException(404, f"Норматив {rule_id} не сохранён")
+    log_action("update_rule", "rule", rule_id, f"fields: {list(updates.keys())}")
+    return {"status": "ok", "rule": gigachat.rules_by_id.get(rule_id)}
 
 
 @app.get("/admin/rules/version")
 def admin_rules_version():
-    active = get_active_rules_version()
-    all_versions = get_all_rules_versions()
-    return {"active": active, "all": all_versions}
+    return {"active": get_active_rules_version(), "all": get_all_rules_versions()}
 
 
 @app.get("/admin/config")
 def admin_config():
     from config import settings
     return {
-        "giga_model": settings.giga_model,
-        "giga_scope": settings.giga_scope,
+        "giga_model": settings.giga_model, "giga_scope": settings.giga_scope,
         "warning_tolerance_percent": settings.warning_tolerance_percent,
-        "log_level": settings.log_level,
-        "rules_path": settings.rules_path,
+        "log_level": settings.log_level, "rules_path": settings.rules_path,
         "db_path": settings.db_path,
     }
 
 
-@app.put("/admin/rules/{rule_id}")
-def admin_update_rule(rule_id: str, payload: RuleUpdate):
-    rule = gigachat.rules_by_id.get(rule_id)
-    if not rule:
-        raise HTTPException(404, f"Норматив {rule_id} не найден")
+@app.post("/admin/rules/upload")
+async def admin_upload_rules(file: UploadFile = File(...)):
+    try:
+        content = await file.read()
+        from pathlib import Path
+        upload_path = Path(__file__).parent / f"uploaded_{file.filename}"
+        with open(upload_path, "wb") as f:
+            f.write(content)
+        result = gigachat.reload_rules_from_file(file.filename)
+        if "error" not in result:
+            log_action("upload_rules", "rules", file.filename, f"count={result.get('count')}")
+        return result
+    except Exception as e:
+        logger.exception("Ошибка загрузки нормативов")
+        return {"error": str(e)}
 
-    if payload.value is not None:
-        rule["value"] = payload.value
-    if payload.aliases is not None:
-        rule["aliases"] = payload.aliases
 
-    from classifier import build_alias_index
-    gigachat.alias_index = build_alias_index(gigachat.rules)
+@app.post("/admin/assistant")
+def admin_assistant(req: AssistantRequest):
+    try:
+        result = gigachat.ask_assistant(req.question)
+        if "answer" in result:
+            log_action("assistant_query", "assistant", "", req.question[:100])
+        return result
+    except Exception as e:
+        return {"error": str(e)}
 
-    logger.info("Правило %s обновлено в памяти", rule_id)
-    return {"status": "ok", "rule": rule}
+
+@app.post("/admin/rules/generate_aliases")
+def admin_generate_aliases(req: GenerateAliasesRequest):
+    try:
+        return {"aliases": gigachat.generate_aliases(req.parameter, req.unit)}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/admin/audit")
+def admin_audit(limit: int = 100):
+    return {"items": get_audit_log(limit)}
+
+
+@app.get("/admin/export/history")
+def admin_export_history():
+    return {"rows": export_history_rows()}
+
+
+@app.get("/admin/users")
+def admin_users():
+    return {"items": get_users()}
 
 
 if __name__ == "__main__":

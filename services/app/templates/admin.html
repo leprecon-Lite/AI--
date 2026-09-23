@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" href="/static/logo.png">
   <title>Админ-панель — AI Quality Agent</title>
   <style>
     * { box-sizing: border-box; }
@@ -12,31 +13,100 @@
       background: #f7f4ef;
       color: #2b2b2b;
     }
-    header.site-header {
-      background: #f7f4ef;
+
+    /* ---------- Hero-секция с фоновой картинкой ---------- */
+    .hero-section {
+      position: relative;
+      background-image:
+        linear-gradient(rgba(30, 15, 5, 0.65), rgba(30, 15, 5, 0.75)),
+        url('/static/bg-coffee.jpg');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      padding-bottom: 30px;
       border-bottom: 1px solid #eadfce;
+    }
+
+    header.site-header {
       padding: 18px 40px;
       display: flex;
       align-items: center;
       gap: 40px;
+      position: relative;
+      z-index: 2;
     }
     .logo {
-      font-size: 22px; font-weight: 700; color: #f15a24;
-      letter-spacing: .5px; display: flex; align-items: center; gap: 8px;
+      font-size: 22px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: .5px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-shadow: 0 1px 3px rgba(0,0,0,.4);
     }
-    .logo::before { content: "●"; color: #f15a24; font-size: 26px; }
-    nav.site-nav { display: flex; gap: 28px; font-size: 14px; color: #3d3d3d; }
-    nav.site-nav a { color: #3d3d3d; text-decoration: none; transition: color .15s; }
+    .logo img {
+      width: 42px;
+      height: 42px;
+      object-fit: contain;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,.35));
+    }
+    nav.site-nav { display: flex; gap: 28px; font-size: 14px; }
+    nav.site-nav a {
+      color: #f3ead9;
+      text-decoration: none;
+      transition: color .15s;
+      text-shadow: 0 1px 3px rgba(0,0,0,.4);
+    }
     nav.site-nav a:hover, nav.site-nav a.active { color: #f15a24; }
 
+    /* ---------- Заголовок страницы ---------- */
     .page-title {
-      background: #f7f4ef; padding: 20px 40px 0;
-      display: flex; align-items: baseline; gap: 16px;
+      padding: 20px 40px 0;
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+      position: relative;
+      z-index: 2;
     }
-    .page-title h1 { font-size: 24px; margin: 0; }
-    .page-title .subtitle { color: #8a7a5c; font-size: 14px; }
+    .page-title h1 {
+      font-size: 26px;
+      margin: 0;
+      color: #fff;
+      text-shadow: 0 2px 6px rgba(0,0,0,.5);
+    }
+    .page-title .subtitle {
+      color: #e5d9c4;
+      font-size: 14px;
+      text-shadow: 0 1px 3px rgba(0,0,0,.4);
+    }
 
-    .container { max-width: 1200px; margin: 24px auto 60px; padding: 0 40px; }
+    /* ---------- Вкладки ---------- */
+    .tabs {
+      background: #f7f4ef;
+      border-bottom: 1px solid #eadfce;
+      padding: 16px 40px 0;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .tab {
+      padding: 10px 18px;
+      background: transparent;
+      border: none;
+      border-bottom: 3px solid transparent;
+      cursor: pointer;
+      color: #6a6a6a;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: inherit;
+      transition: all .15s;
+    }
+    .tab:hover { color: #f15a24; }
+    .tab.active { color: #f15a24; border-bottom-color: #f15a24; }
+
+    /* ---------- Контейнер и карточки ---------- */
+    .container { max-width: 1400px; margin: 24px auto 60px; padding: 0 40px; }
 
     .stats-grid {
       display: grid; grid-template-columns: repeat(4, 1fr);
@@ -63,7 +133,7 @@
       font-size: 12px; color: #6a6a6a; text-transform: uppercase;
       letter-spacing: .05em; border-bottom: 1px solid #eadfce;
     }
-    td { padding: 12px 16px; border-bottom: 1px solid #f1eadc; font-size: 14px; }
+    td { padding: 12px 16px; border-bottom: 1px solid #f1eadc; font-size: 14px; vertical-align: top; }
     tr:last-child td { border-bottom: none; }
     tr:hover td { background: #fdfaf6; }
 
@@ -80,119 +150,520 @@
       background: #faf7f2; padding: 2px 6px; border-radius: 4px; color: #8a6400;
     }
     .empty { text-align: center; padding: 40px; color: #8a7a5c; }
+
+    .btn {
+      display: inline-block;
+      padding: 8px 16px;
+      background: #f15a24; color: #fff;
+      border: none; border-radius: 8px;
+      font-family: inherit; font-size: 13px; font-weight: 500;
+      cursor: pointer; transition: background .15s;
+      text-decoration: none;
+    }
+    .btn:hover { background: #d94a17; }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+    .btn-secondary {
+      background: #fff; color: #6a6a6a;
+      border: 1px solid #eadfce;
+    }
+    .btn-secondary:hover { background: #fdfaf6; color: #f15a24; border-color: #f15a24; }
+
+    .filter-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .filter-btn {
+      padding: 6px 14px; background: #fff;
+      border: 1px solid #eadfce; border-radius: 8px;
+      cursor: pointer; font-family: inherit;
+      font-size: 13px; color: #3d3d3d;
+    }
+    .filter-btn:hover { border-color: #f15a24; color: #f15a24; }
+    .filter-btn.active { background: #f15a24; color: #fff; border-color: #f15a24; }
+
+    /* ---------- Модальное окно ---------- */
+    .qai-modal-backdrop {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.55); z-index: 1000;
+      align-items: center; justify-content: center; padding: 20px;
+    }
+    .qai-modal-backdrop.active { display: flex; }
+    .qai-modal {
+      background: #fff; border-radius: 14px;
+      max-width: 640px; width: 100%; max-height: 85vh;
+      overflow-y: auto; padding: 28px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.3);
+    }
+    .qai-modal h2 { margin: 0 0 20px; font-size: 20px; }
+    .form-row { margin-bottom: 16px; }
+    .form-row label {
+      display: block; font-size: 13px; color: #6a6a6a;
+      margin-bottom: 6px; font-weight: 500;
+    }
+    .form-row input[type="text"],
+    .form-row input[type="number"],
+    .form-row select,
+    .form-row textarea {
+      width: 100%; padding: 10px 12px;
+      border: 1px solid #eadfce; border-radius: 8px;
+      font-family: inherit; font-size: 14px;
+      background: #faf7f2;
+    }
+    .form-row input:focus,
+    .form-row select:focus,
+    .form-row textarea:focus {
+      outline: none; border-color: #f15a24; background: #fff;
+    }
+    .form-row textarea { min-height: 80px; resize: vertical; }
+    .form-actions { display: flex; gap: 12px; margin-top: 24px; }
+    .form-actions button { flex: 1; padding: 12px; font-size: 14px; }
+
+    .toast {
+      position: fixed; bottom: 30px; right: 30px;
+      background: #2b2b2b; color: #fff;
+      padding: 14px 22px; border-radius: 10px;
+      font-size: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.25);
+      z-index: 2000; opacity: 0; transform: translateY(20px);
+      transition: all .3s ease; pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.error { background: #c0392b; }
+    .toast.success { background: #3fa34d; }
   </style>
 </head>
 <body>
 
-  <header class="site-header">
-    <div class="logo">СОЛЯРИС</div>
-    <nav class="site-nav">
-      <a href="/">Проверка качества</a>
-      <a href="/admin" class="active">Админ-панель</a>
-    </nav>
-  </header>
+  <div class="hero-section">
+    <header class="site-header">
+      <div class="logo">
+        <img src="/static/logo.png" alt="СОЛЯРИС">
+        СОЛЯРИС
+      </div>
+      <nav class="site-nav">
+        <a href="/">Проверка качества</a>
+        <a href="/admin" class="active">Админ-панель</a>
+      </nav>
+    </header>
 
-  <div class="page-title">
-    <h1>Панель администратора</h1>
-    <span class="subtitle">Управление проверками и нормативами</span>
+    <div class="page-title">
+      <h1>Панель администратора</h1>
+      <span class="subtitle">Управление проверками и нормативами</span>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('stats', this)">📊 Статистика</button>
+    <button class="tab" onclick="showTab('protocols', this)">📋 История</button>
+    <button class="tab" onclick="showTab('rules', this)">📖 Нормативы</button>
+    <button class="tab" onclick="showTab('assistant', this)">🤖 Ассистент</button>
+    <button class="tab" onclick="showTab('audit', this)">📜 Журнал действий</button>
   </div>
 
   <div class="container">
-
-    <!-- СТАТИСТИКА -->
-    <div class="stats-grid">
-      <div class="stat-card"><div class="stat-label">Всего проверок</div><div class="stat-value">{{ stats.total }}</div></div>
-      <div class="stat-card good"><div class="stat-label">🟢 Годно</div><div class="stat-value">{{ stats.good }}</div></div>
-      <div class="stat-card warning"><div class="stat-label">🟡 Внимание</div><div class="stat-value">{{ stats.warning }}</div></div>
-      <div class="stat-card defect"><div class="stat-label">🔴 Брак</div><div class="stat-value">{{ stats.defect }}</div></div>
-    </div>
-
-    {% if stats.top_fails %}
-    <div class="card">
-      <h3 class="card-title">Топ-5 параметров, вызывающих брак</h3>
-      <table>
-        <thead><tr><th>Параметр</th><th>Кол-во браковок</th></tr></thead>
-        <tbody>
-          {% for f in stats.top_fails %}
-          <tr><td>{{ f.parameter }}</td><td><b>{{ f.count }}</b></td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% endif %}
-
-    <!-- ИСТОРИЯ -->
-    <div class="card">
-      <h3 class="card-title">История проверок (последние 50)</h3>
-      {% if protocols %}
-      <table>
-        <thead>
-          <tr>
-            <th>№</th><th>Файл</th><th>Дата</th><th>Строк</th>
-            <th>Брак</th><th>Внимание</th><th>Статус</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for p in protocols %}
-          <tr>
-            <td><b>{{ p.id }}</b></td>
-            <td>{{ p.filename }}</td>
-            <td>{{ (p.uploaded_at or '')[:19].replace('T', ' ') }}</td>
-            <td>{{ p.total_rows }}</td>
-            <td>{{ p.failed_rows }}</td>
-            <td>{{ p.warning_rows }}</td>
-            <td><span class="badge badge-{{ p.overall_status }}">{{ p.overall_status }}</span></td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-      <div class="empty">Проверок пока нет. Загрузите файл на странице проверки.</div>
-      {% endif %}
-    </div>
-
-    <!-- НОРМАТИВЫ -->
-    <div class="card">
-      <h3 class="card-title">Нормативы ГОСТ 32775—2014 ({{ rules|length }} пунктов)</h3>
-      <table>
-        <thead>
-          <tr><th>ID</th><th>Пункт</th><th>Параметр</th><th>Оператор</th><th>Значение</th><th>Ед.</th></tr>
-        </thead>
-        <tbody>
-          {% for r in rules %}
-          <tr>
-            <td><span class="code">{{ r.id }}</span></td>
-            <td>{{ r.clause or '' }}</td>
-            <td>{{ r.parameter or '' }}</td>
-            <td>{{ r.operator or '' }}</td>
-            <td>
-              {% if r.operator == 'от ... до' and r.value is mapping %}
-                {{ r.value.min }}…{{ r.value.max }}
-              {% elif r.value is not none %}
-                {{ r.value }}
-              {% endif %}
-            </td>
-            <td>{{ r.unit or '' }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-
-    <!-- НАСТРОЙКИ -->
-    <div class="card">
-      <h3 class="card-title">Текущие настройки</h3>
-      <table>
-        <tr><td>Модель GigaChat</td><td><span class="code">{{ config.giga_model }}</span></td></tr>
-        <tr><td>Scope</td><td><span class="code">{{ config.giga_scope }}</span></td></tr>
-        <tr><td>Tolerance (%)</td><td><span class="code">{{ config.warning_tolerance_percent }}</span></td></tr>
-        <tr><td>Уровень логирования</td><td><span class="code">{{ config.log_level }}</span></td></tr>
-        <tr><td>Файл нормативов</td><td><span class="code">{{ config.rules_path }}</span></td></tr>
-        <tr><td>Файл БД</td><td><span class="code">{{ config.db_path }}</span></td></tr>
-      </table>
-    </div>
-
+    <div id="panel-stats"></div>
+    <div id="panel-protocols" style="display:none;"></div>
+    <div id="panel-rules" style="display:none;"></div>
+    <div id="panel-assistant" style="display:none;"></div>
+    <div id="panel-audit" style="display:none;"></div>
   </div>
+
+  <div class="qai-modal-backdrop" id="ruleModal">
+    <div class="qai-modal">
+      <h2 id="ruleModalTitle">Редактирование норматива</h2>
+      <div id="ruleModalBody"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const API_BASE = (window.location.port === '5500')
+      ? 'http://127.0.0.1:8888'
+      : '';
+
+    const loaded = { stats: false, protocols: false, rules: false, assistant: false, audit: false };
+
+    function showTab(name, btn) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+
+      ['stats', 'protocols', 'rules', 'assistant', 'audit'].forEach(t => {
+        document.getElementById('panel-' + t).style.display = (t === name) ? 'block' : 'none';
+      });
+
+      if (!loaded[name]) {
+        loaded[name] = true;
+        loadTab(name);
+      }
+    }
+
+    function loadTab(name) {
+      const panel = document.getElementById('panel-' + name);
+      panel.innerHTML = '<div class="empty">⏳ Загрузка…</div>';
+
+      if (name === 'stats') {
+        fetch(API_BASE + '/admin/api/stats').then(r => r.json()).then(renderStats);
+      } else if (name === 'protocols') {
+        loadProtocols('');
+      } else if (name === 'rules') {
+        fetch(API_BASE + '/admin/api/rules').then(r => r.json()).then(renderRules);
+      } else if (name === 'assistant') {
+        renderAssistant();
+      } else if (name === 'audit') {
+        fetch(API_BASE + '/admin/api/audit?limit=100').then(r => r.json()).then(renderAudit);
+      }
+    }
+
+    function toast(msg, type = 'success') {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'toast show ' + type;
+      setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    // ============== СТАТИСТИКА ==============
+    function renderStats(data) {
+      const panel = document.getElementById('panel-stats');
+      if (data.error) { panel.innerHTML = '<div class="card">' + data.error + '</div>'; return; }
+
+      let html = '<div class="stats-grid">';
+      html += '<div class="stat-card"><div class="stat-label">Всего проверок</div><div class="stat-value">' + data.total + '</div></div>';
+      html += '<div class="stat-card good"><div class="stat-label">🟢 Годно</div><div class="stat-value">' + data.good + '</div></div>';
+      html += '<div class="stat-card warning"><div class="stat-label">🟡 Внимание</div><div class="stat-value">' + data.warning + '</div></div>';
+      html += '<div class="stat-card defect"><div class="stat-label">🔴 Брак</div><div class="stat-value">' + data.defect + '</div></div>';
+      html += '</div>';
+
+      if (data.top_fails && data.top_fails.length > 0) {
+        html += '<div class="card"><h3 class="card-title">Топ-5 параметров, вызывающих брак</h3>';
+        html += '<table><thead><tr><th>Параметр</th><th>Кол-во</th></tr></thead><tbody>';
+        data.top_fails.forEach(f => {
+          html += '<tr><td>' + f.parameter + '</td><td><b>' + f.count + '</b></td></tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+
+      if (data.by_day && data.by_day.length > 0) {
+        html += '<div class="card"><h3 class="card-title">Активность по дням</h3>';
+        html += '<table><thead><tr><th>Дата</th><th>Проверок</th></tr></thead><tbody>';
+        data.by_day.forEach(d => {
+          html += '<tr><td>' + d.date + '</td><td>' + d.count + '</td></tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+
+      panel.innerHTML = html;
+    }
+
+    // ============== ИСТОРИЯ ==============
+    function loadProtocols(status) {
+      const panel = document.getElementById('panel-protocols');
+      if (!panel.querySelector('.filter-bar')) {
+        panel.innerHTML = '<div class="filter-bar">' +
+          '<button class="filter-btn active" onclick="loadProtocols(\'\')">Все</button>' +
+          '<button class="filter-btn" onclick="loadProtocols(\'good\')">🟢 Годно</button>' +
+          '<button class="filter-btn" onclick="loadProtocols(\'warning\')">🟡 Внимание</button>' +
+          '<button class="filter-btn" onclick="loadProtocols(\'defect\')">🔴 Брак</button>' +
+          '<a class="btn btn-secondary btn-sm" style="margin-left:auto" href="' + API_BASE + '/admin/api/export/history" target="_blank">⬇ Экспорт</a>' +
+          '</div><div id="protocols-list"><div class="empty">⏳ Загрузка…</div></div>';
+      } else {
+        document.getElementById('protocols-list').innerHTML = '<div class="empty">⏳ Загрузка…</div>';
+      }
+      fetch(API_BASE + '/admin/api/protocols?status=' + status + '&limit=50')
+        .then(r => r.json()).then(renderProtocols);
+    }
+
+    function renderProtocols(data) {
+      const list = document.getElementById('protocols-list');
+      if (!data.items || data.items.length === 0) {
+        list.innerHTML = '<div class="card"><div class="empty">Проверок пока нет</div></div>';
+        return;
+      }
+      let html = '<div class="card"><table><thead><tr>' +
+        '<th>№</th><th>Файл</th><th>Дата</th><th>Строк</th><th>Брак</th><th>Внимание</th><th>Статус</th><th>Действия</th>' +
+        '</tr></thead><tbody>';
+      data.items.forEach(p => {
+        html += '<tr>' +
+          '<td><b>' + p.id + '</b></td>' +
+          '<td>' + p.filename + '</td>' +
+          '<td>' + (p.uploaded_at || '').slice(0, 19).replace('T', ' ') + '</td>' +
+          '<td>' + p.total_rows + '</td>' +
+          '<td>' + p.failed_rows + '</td>' +
+          '<td>' + p.warning_rows + '</td>' +
+          '<td><span class="badge badge-' + p.overall_status + '">' + p.overall_status + '</span></td>' +
+          '<td><a class="btn btn-secondary btn-sm" href="' + API_BASE + '/export/pdf/' + p.id + '" target="_blank">📄 PDF</a></td>' +
+          '</tr>';
+      });
+      html += '</tbody></table></div>';
+      list.innerHTML = html;
+    }
+
+    // ============== НОРМАТИВЫ ==============
+    function renderRules(data) {
+      const panel = document.getElementById('panel-rules');
+      if (data.error) { panel.innerHTML = '<div class="card">' + data.error + '</div>'; return; }
+
+      let html = '<div class="card">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
+      html += '<h3 class="card-title" style="margin:0">Нормативы ГОСТ (' + data.total + ')</h3>';
+      html += '<button class="btn btn-secondary btn-sm" onclick="showUploadForm()">⬆ Загрузить новый ГОСТ</button>';
+      html += '</div>';
+      html += '<table><thead><tr><th>ID</th><th>Пункт</th><th>Параметр</th><th>Оператор</th><th>Значение</th><th>Ед.</th><th></th></tr></thead><tbody>';
+      data.items.forEach(r => {
+        let val = '';
+        if (r.operator === 'от ... до' && typeof r.value === 'object' && r.value) {
+          val = r.value.min + '…' + r.value.max;
+        } else if (r.value !== null && r.value !== undefined) {
+          val = String(r.value).slice(0, 40);
+        }
+        html += '<tr>' +
+          '<td><span class="code">' + r.id + '</span></td>' +
+          '<td>' + (r.clause || '') + '</td>' +
+          '<td>' + (r.parameter || '') + '</td>' +
+          '<td>' + (r.operator || '') + '</td>' +
+          '<td>' + val + '</td>' +
+          '<td>' + (r.unit || '') + '</td>' +
+          '<td><button class="btn btn-sm" onclick="editRule(\'' + r.id + '\')">Изменить</button></td>' +
+          '</tr>';
+      });
+      html += '</tbody></table></div>';
+      panel.innerHTML = html;
+    }
+
+    function editRule(ruleId) {
+      fetch(API_BASE + '/admin/api/rules/' + ruleId)
+        .then(r => r.json())
+        .then(rule => {
+          const modal = document.getElementById('ruleModal');
+          document.getElementById('ruleModalTitle').textContent = 'Редактирование: ' + rule.parameter;
+
+          let op = rule.operator || 'не более';
+          let valMin = '', valMax = '', valText = '';
+          if (op === 'не более') valMax = rule.value || '';
+          else if (op === 'не менее') valMin = rule.value || '';
+          else if (op === 'от ... до') {
+            if (rule.value && typeof rule.value === 'object') {
+              valMin = rule.value.min || ''; valMax = rule.value.max || '';
+            }
+          } else {
+            valText = rule.value || '';
+          }
+
+          let html = '<div class="form-row"><label>Пункт ГОСТа</label>' +
+            '<input type="text" value="' + (rule.clause || '') + '" disabled></div>';
+          html += '<div class="form-row"><label>Параметр</label>' +
+            '<input type="text" value="' + (rule.parameter || '') + '" disabled></div>';
+          html += '<div class="form-row"><label>Единица измерения</label>' +
+            '<input type="text" id="editUnit" value="' + (rule.unit || '') + '"></div>';
+          html += '<div class="form-row"><label>Оператор</label>' +
+            '<select id="editOperator" onchange="updateOperatorFields()">' +
+            '<option value="не более"' + (op === 'не более' ? ' selected' : '') + '>не более</option>' +
+            '<option value="не менее"' + (op === 'не менее' ? ' selected' : '') + '>не менее</option>' +
+            '<option value="от ... до"' + (op === 'от ... до' ? ' selected' : '') + '>от ... до</option>' +
+            '<option value="требование"' + (op === 'требование' ? ' selected' : '') + '>требование</option>' +
+            '<option value="не допускается"' + (op === 'не допускается' ? ' selected' : '') + '>не допускается</option>' +
+            '</select></div>';
+
+          html += '<div id="opFields"></div>';
+
+          html += '<div class="form-row"><label>Синонимы (через ;)</label>' +
+            '<textarea id="editAliases">' + (rule.aliases || []).join('; ') + '</textarea>' +
+            '<button type="button" class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="generateAliases()">🤖 Сгенерировать синонимы</button>' +
+            '</div>';
+
+          html += '<div class="form-actions">' +
+            '<button class="btn btn-secondary" onclick="closeRuleModal()">Отмена</button>' +
+            '<button class="btn" onclick="saveRule(\'' + ruleId + '\')">Сохранить</button>' +
+            '</div>';
+
+          document.getElementById('ruleModalBody').innerHTML = html;
+          updateOperatorFields(valMin, valMax, valText);
+          modal.classList.add('active');
+        });
+    }
+
+    function updateOperatorFields(valMin = '', valMax = '', valText = '') {
+      const op = document.getElementById('editOperator').value;
+      const f = document.getElementById('opFields');
+      let html = '';
+
+      if (op === 'не более') {
+        html = '<div class="form-row"><label>Максимум</label>' +
+          '<input type="number" step="0.0001" id="editValueMax" value="' + valMax + '"></div>';
+      } else if (op === 'не менее') {
+        html = '<div class="form-row"><label>Минимум</label>' +
+          '<input type="number" step="0.0001" id="editValueMin" value="' + valMin + '"></div>';
+      } else if (op === 'от ... до') {
+        html = '<div class="form-row"><label>Минимум</label>' +
+          '<input type="number" step="0.0001" id="editValueMin" value="' + valMin + '"></div>' +
+          '<div class="form-row"><label>Максимум</label>' +
+          '<input type="number" step="0.0001" id="editValueMax" value="' + valMax + '"></div>';
+      } else {
+        html = '<div class="form-row"><label>Значение (текст)</label>' +
+          '<input type="text" id="editValueText" value="' + valText + '"></div>';
+      }
+      f.innerHTML = html;
+    }
+
+    function generateAliases() {
+      const inputs = document.querySelectorAll('#ruleModalBody input[disabled]');
+      const param = inputs[1] ? inputs[1].value : '';
+      const unit = document.getElementById('editUnit').value;
+
+      toast('🤖 GigaChat генерирует синонимы...', 'success');
+      fetch(API_BASE + '/admin/api/rules/generate_aliases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parameter: param, unit: unit })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.aliases && data.aliases.length > 0) {
+          document.getElementById('editAliases').value = data.aliases.join('; ');
+          toast('✅ Сгенерировано ' + data.aliases.length + ' синонимов', 'success');
+        } else {
+          toast('Не удалось сгенерировать', 'error');
+        }
+      });
+    }
+
+    function saveRule(ruleId) {
+      const op = document.getElementById('editOperator').value;
+      const unit = document.getElementById('editUnit').value;
+      const aliases = document.getElementById('editAliases').value
+        .split(';').map(a => a.trim()).filter(a => a);
+
+      const payload = { operator: op, unit: unit, aliases: aliases };
+      if (op === 'не более') payload.value_max = parseFloat(document.getElementById('editValueMax').value);
+      else if (op === 'не менее') payload.value_min = parseFloat(document.getElementById('editValueMin').value);
+      else if (op === 'от ... до') {
+        payload.value_min = parseFloat(document.getElementById('editValueMin').value);
+        payload.value_max = parseFloat(document.getElementById('editValueMax').value);
+      } else payload.value_text = document.getElementById('editValueText').value;
+
+      fetch(API_BASE + '/admin/api/rules/' + ruleId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === 'ok') {
+          toast('✅ Норматив сохранён', 'success');
+          closeRuleModal();
+          loaded.rules = false;
+          loadTab('rules');
+        } else {
+          toast('Ошибка: ' + (data.error || 'неизвестно'), 'error');
+        }
+      });
+    }
+
+    function closeRuleModal() {
+      document.getElementById('ruleModal').classList.remove('active');
+    }
+
+    function showUploadForm() {
+      const modal = document.getElementById('ruleModal');
+      document.getElementById('ruleModalTitle').textContent = 'Загрузка нового ГОСТа';
+
+      let html = '<div class="form-row"><label>Выберите XLSX-файл с нормативами</label>' +
+        '<input type="file" id="uploadRulesFile" accept=".xlsx,.xls"></div>' +
+        '<p style="color:#8a7a5c;font-size:13px;line-height:1.6">' +
+        'Файл должен иметь колонки: id, standard, clause, category, parameter, aliases, operator, ' +
+        'value_min, value_max, value_text, unit, method_ref, text</p>' +
+        '<div class="form-actions">' +
+        '<button class="btn btn-secondary" onclick="closeRuleModal()">Отмена</button>' +
+        '<button class="btn" onclick="uploadRules()">Загрузить</button>' +
+        '</div>';
+
+      document.getElementById('ruleModalBody').innerHTML = html;
+      modal.classList.add('active');
+    }
+
+    function uploadRules() {
+      const fileInput = document.getElementById('uploadRulesFile');
+      if (!fileInput.files[0]) { toast('Выберите файл', 'error'); return; }
+
+      const fd = new FormData();
+      fd.append('file', fileInput.files[0]);
+
+      toast('⬆ Загрузка...', 'success');
+      fetch(API_BASE + '/admin/api/rules/upload', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+          if (data.count) {
+            toast('✅ Загружено ' + data.count + ' нормативов', 'success');
+            closeRuleModal();
+            loaded.rules = false;
+            loadTab('rules');
+          } else {
+            toast('Ошибка: ' + (data.error || 'неизвестно'), 'error');
+          }
+        });
+    }
+
+    // ============== АССИСТЕНТ ==============
+    function renderAssistant() {
+      const panel = document.getElementById('panel-assistant');
+      panel.innerHTML =
+        '<div class="card">' +
+        '<h3 class="card-title">🤖 Ассистент администратора (GigaChat)</h3>' +
+        '<p style="color:#8a7a5c;font-size:14px;margin-bottom:16px">' +
+        'Задайте вопрос по нормативам, работе системы или разбору протокола. ' +
+        'Ассистент опирается на базу ГОСТ 32775—2014 и общие знания о стандартизации.</p>' +
+        '<div class="form-row"><textarea id="assistantQuestion" placeholder="Например: Какие параметры ГОСТа чаще всего вызывают брак? Или: Как интерпретировать превышение влаги на 3%?"></textarea></div>' +
+        '<button class="btn" onclick="askAssistant()">Спросить</button>' +
+        '<div id="assistantAnswer" style="margin-top:20px"></div>' +
+        '</div>';
+    }
+
+    function askAssistant() {
+      const q = document.getElementById('assistantQuestion').value.trim();
+      if (!q) { toast('Введите вопрос', 'error'); return; }
+
+      const ans = document.getElementById('assistantAnswer');
+      ans.innerHTML = '<div class="empty">⏳ GigaChat думает…</div>';
+
+      fetch(API_BASE + '/admin/api/assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.answer) {
+          ans.innerHTML = '<div class="card" style="background:#f5fbf6;border-left:4px solid #3fa34d;">' +
+            '<div style="font-weight:600;color:#2f7d3c;margin-bottom:8px">Ответ ассистента</div>' +
+            '<div style="line-height:1.65">' + data.answer + '</div></div>';
+        } else {
+          ans.innerHTML = '<div class="card" style="background:#fde9e7;color:#8b2c20;">' +
+            'Ошибка: ' + (data.error || 'неизвестно') + '</div>';
+        }
+      });
+    }
+
+    // ============== ЖУРНАЛ ==============
+    function renderAudit(data) {
+      const panel = document.getElementById('panel-audit');
+      if (!data.items || data.items.length === 0) {
+        panel.innerHTML = '<div class="card"><div class="empty">Журнал пуст</div></div>';
+        return;
+      }
+      let html = '<div class="card"><h3 class="card-title">Журнал действий (' + data.items.length + ')</h3>';
+      html += '<table><thead><tr><th>Время</th><th>Кто</th><th>Действие</th><th>Объект</th><th>Детали</th></tr></thead><tbody>';
+      data.items.forEach(a => {
+        html += '<tr>' +
+          '<td>' + (a.created_at || '').slice(0, 19).replace('T', ' ') + '</td>' +
+          '<td>' + (a.actor || '') + '</td>' +
+          '<td><span class="code">' + (a.action || '') + '</span></td>' +
+          '<td>' + (a.target_type || '') + ' ' + (a.target_id || '') + '</td>' +
+          '<td>' + (a.details || '') + '</td>' +
+          '</tr>';
+      });
+      html += '</tbody></table></div>';
+      panel.innerHTML = html;
+    }
+
+    // Загружаем статистику по умолчанию
+    loadTab('stats');
+  </script>
 
 </body>
 </html>

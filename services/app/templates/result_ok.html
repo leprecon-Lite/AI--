@@ -8,9 +8,33 @@
         Файл: <b>{{ data.filename }}</b> ·
         Всего партий: <b>{{ data.total_rows }}</b> ·
         Протокол №{{ data.protocol_id }}
+        {% if data.cache_hit %} · <span style="color:#3fa34d;">⚡ из кэша</span>{% endif %}
       </div>
     </div>
+    <div class="qai-summary-actions">
+      <a class="qai-pdf-btn" href="/export/pdf/{{ data.protocol_id }}" target="_blank">
+        📄 Скачать PDF
+      </a>
+    </div>
   </div>
+
+  {% if data.risk %}
+  <div class="qai-risk qai-risk-{{ data.risk.label }}">
+    <div class="qai-risk-header">
+      <span class="qai-risk-title">Прогноз риска партии</span>
+      <span class="qai-risk-value">
+        {{ data.risk.risk_percent }}% — <b>{{ data.risk.label_ru }}</b>
+      </span>
+    </div>
+    {% if data.risk.factors %}
+    <ul class="qai-risk-factors">
+      {% for f in data.risk.factors %}
+        <li>{{ f }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+  {% endif %}
 
   {% if data.report_text %}
   <div class="qai-report">
@@ -46,10 +70,8 @@
                   {{ p.unit or '' }},
                   норма <span class="qai-norm">{{ p.norm }}</span>
                   <span class="qai-tag">{{ p.status_ru }}</span>
-
                   {% if p.rule_id and p.status == 'fail' %}
-                    <button type="button"
-                            class="qai-explain-btn"
+                    <button type="button" class="qai-explain-btn"
                             data-rule-id="{{ p.rule_id }}"
                             data-actual="{{ p.actual }}"
                             data-param="{{ p.parameter }}">
@@ -70,9 +92,7 @@
 
   {% if data.unchecked %}
   <div class="qai-unchecked">
-    <div class="qai-unchecked-title">
-      ⚠️ Не проверено (нет в протоколе): {{ data.unchecked|length }} параметр(ов)
-    </div>
+    <div class="qai-unchecked-title">⚠️ Не проверено (нет в протоколе): {{ data.unchecked|length }}</div>
     <ul class="qai-unchecked-list">
       {% for u in data.unchecked[:10] %}
         <li><b>{{ u.parameter }}</b> — норма {{ u.norm }} (п. {{ u.clause }})</li>
@@ -86,20 +106,37 @@
 
   {% if data.unit_warnings %}
   <div class="qai-unit-warning">
-    <div class="qai-unit-warning-title">
-      ⚠️ Возможное несовпадение единиц измерения: {{ data.unit_warnings|length }}
-    </div>
+    <div class="qai-unit-warning-title">⚠️ Возможное несовпадение единиц: {{ data.unit_warnings|length }}</div>
     <ul class="qai-unit-warning-list">
       {% for u in data.unit_warnings[:5] %}
-        <li>
-          Колонка <b>{{ u.source_column }}</b> (строка {{ u.row_index }}) —
-          ожидается единица <b>{{ u.expected_unit }}</b>
-        </li>
+        <li>Колонка <b>{{ u.source_column }}</b> (строка {{ u.row_index }}) — ожидается <b>{{ u.expected_unit }}</b></li>
       {% endfor %}
     </ul>
-    <div class="qai-unit-warning-hint">
-      Проверьте, что в протоколе указаны те же единицы измерения, что и в нормативе.
-    </div>
+  </div>
+  {% endif %}
+
+  {% if data.similar_protocols %}
+  <div class="qai-similar">
+    <div class="qai-similar-title">🔎 Похожие протоколы в истории</div>
+    <table class="qai-table" style="margin-top:12px;">
+      <thead>
+        <tr>
+          <th>№</th><th>Файл</th><th>Дата</th><th>Брак</th><th>Статус</th><th>Сходство</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in data.similar_protocols %}
+        <tr>
+          <td>{{ s.protocol_id }}</td>
+          <td>{{ s.filename }}</td>
+          <td>{{ s.uploaded_at[:10] }}</td>
+          <td>{{ s.failed_rows }} / {{ s.total_rows }}</td>
+          <td><span class="badge badge-{{ s.overall_status }}">{{ s.overall_status }}</span></td>
+          <td><b>{{ s.similarity }}%</b></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
   {% endif %}
 
